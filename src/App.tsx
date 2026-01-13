@@ -34,6 +34,7 @@ function App() {
 
   const handleTableSelect = (database: string, schema: string, table: string) => {
     setQuery(`SELECT * FROM ${schema}.${table} LIMIT 100;`);
+    handleExecute();
   };
 
   const handleExecute = async () => {
