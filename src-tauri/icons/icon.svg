@@ -10,28 +10,29 @@
     </linearGradient>
   </defs>
 
-  <!-- Background circle -->
-  <circle cx="256" cy="256" r="240" fill="url(#grad1)"/>
+  <!-- Background circle - r=206 gives ~100px border at 1024px -->
+  <circle cx="256" cy="256" r="206" fill="url(#grad1)"/>
 
-  <!-- Database cylinder - top ellipse -->
-  <ellipse cx="256" cy="140" rx="120" ry="40" fill="#e0f2fe" opacity="0.95"/>
+  <!-- Database cylinder - scaled to fit smaller circle -->
+  <!-- Top ellipse -->
+  <ellipse cx="256" cy="156" rx="103" ry="34" fill="#e0f2fe" opacity="0.95"/>
 
-  <!-- Database cylinder - body -->
-  <path d="M136 140 L136 320 Q136 360 256 360 Q376 360 376 320 L376 140 Q376 180 256 180 Q136 180 136 140"
+  <!-- Body -->
+  <path d="M153 156 L153 311 Q153 345 256 345 Q359 345 359 311 L359 156 Q359 190 256 190 Q153 190 153 156"
         fill="url(#grad2)" opacity="0.9"/>
 
   <!-- Middle stripe 1 -->
-  <path d="M136 200 Q136 240 256 240 Q376 240 376 200"
-        stroke="#e0f2fe" stroke-width="3" fill="none" opacity="0.6"/>
+  <path d="M153 208 Q153 242 256 242 Q359 242 359 208"
+        stroke="#e0f2fe" stroke-width="2.5" fill="none" opacity="0.6"/>
 
   <!-- Middle stripe 2 -->
-  <path d="M136 260 Q136 300 256 300 Q376 300 376 260"
-        stroke="#e0f2fe" stroke-width="3" fill="none" opacity="0.6"/>
+  <path d="M153 260 Q153 294 256 294 Q359 294 359 260"
+        stroke="#e0f2fe" stroke-width="2.5" fill="none" opacity="0.6"/>
 
   <!-- Bottom curve -->
-  <path d="M136 320 Q136 360 256 360 Q376 360 376 320"
-        stroke="#1e40af" stroke-width="3" fill="none" opacity="0.5"/>
+  <path d="M153 311 Q153 345 256 345 Q359 345 359 311"
+        stroke="#1e40af" stroke-width="2.5" fill="none" opacity="0.5"/>
 
   <!-- Highlight on top -->
-  <ellipse cx="256" cy="140" rx="100" ry="30" fill="#ffffff" opacity="0.3"/>
+  <ellipse cx="256" cy="156" rx="86" ry="26" fill="#ffffff" opacity="0.3"/>
 </svg>
