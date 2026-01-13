@@ -14,12 +14,9 @@ import plugsSvg from "@phosphor-icons/core/assets/regular/plugs.svg?raw";
 import plugsConnectedSvg from "@phosphor-icons/core/assets/regular/plugs-connected.svg?raw";
 import databaseSvg from "@phosphor-icons/core/assets/regular/database.svg?raw";
 import foldersSvg from "@phosphor-icons/core/assets/regular/folders.svg?raw";
-import folderSvg from "@phosphor-icons/core/assets/regular/folder.svg?raw";
-import folderOpenSvg from "@phosphor-icons/core/assets/regular/folder-open.svg?raw";
 import tableSvg from "@phosphor-icons/core/assets/regular/table.svg?raw";
 import eyeSvg from "@phosphor-icons/core/assets/regular/eye.svg?raw";
 import gridNineSvg from "@phosphor-icons/core/assets/regular/grid-nine.svg?raw";
-import columnsSvg from "@phosphor-icons/core/assets/regular/columns.svg?raw";
 import rowsSvg from "@phosphor-icons/core/assets/regular/rows.svg?raw";
 import lightningSvg from "@phosphor-icons/core/assets/regular/lightning.svg?raw";
 import lockSvg from "@phosphor-icons/core/assets/regular/lock.svg?raw";
@@ -291,25 +288,21 @@ export function ObjectTree(props: Props) {
       case "schema":
         return <Icon svg={foldersSvg} size={iconSize} />;
       case "tables":
-        return <Icon svg={node.expanded ? folderOpenSvg : folderSvg} size={iconSize} />;
+      case "views":
+      case "columns":
+      case "indexes":
+      case "constraints":
+        return null;
       case "table":
         return <Icon svg={tableSvg} size={iconSize} />;
-      case "views":
-        return <Icon svg={node.expanded ? folderOpenSvg : folderSvg} size={iconSize} />;
       case "view":
         return <Icon svg={eyeSvg} size={iconSize} />;
       case "data":
         return <Icon svg={gridNineSvg} size={iconSize} />;
-      case "columns":
-        return <Icon svg={columnsSvg} size={iconSize} />;
       case "column":
         return <Icon svg={rowsSvg} size={iconSize} />;
-      case "indexes":
-        return <Icon svg={lightningSvg} size={iconSize} />;
       case "index":
         return <Icon svg={lightningSvg} size={iconSize} />;
-      case "constraints":
-        return <Icon svg={lockSvg} size={iconSize} />;
       case "constraint":
         return <Icon svg={lockSvg} size={iconSize} />;
       default:
