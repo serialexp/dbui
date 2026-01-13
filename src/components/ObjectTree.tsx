@@ -7,7 +7,7 @@ import {
   CaretDown,
   X,
   Trash,
-  PlugsConnected,
+  Plugs,
   Database,
   Folder,
   FolderOpen,
@@ -282,7 +282,7 @@ export function ObjectTree(props: Props) {
     const iconSize = 14;
     switch (node.type) {
       case "connection":
-        return <PlugsConnected size={iconSize} />;
+        return <Plugs size={iconSize} />;
       case "database":
         return <Database size={iconSize} />;
       case "schema":
