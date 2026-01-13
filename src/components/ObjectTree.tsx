@@ -181,6 +181,12 @@ export function ObjectTree(props: Props) {
           ]);
           children = [
             {
+              id: `${node.id}:data`,
+              label: "Data",
+              type: "data" as const,
+              metadata: { connectionId, database, schema, table },
+            },
+            {
               id: `${node.id}:columns`,
               label: "Columns",
               type: "columns" as const,
@@ -217,8 +223,18 @@ export function ObjectTree(props: Props) {
               expanded: false,
             },
           ];
-          props.onTableSelect(database, schema, table);
           break;
+        }
+        case "data": {
+          const { connectionId, database, schema, table } = node.metadata as {
+            connectionId: string;
+            database: string;
+            schema: string;
+            table: string;
+          };
+          props.onTableSelect(database, schema, table);
+          updateNode(node.id, { expanded: true, loading: false });
+          return;
         }
         case "columns":
         case "indexes":
@@ -251,18 +267,19 @@ export function ObjectTree(props: Props) {
       node.children && node.children.length > 0 ||
       ["connection", "database", "schema", "tables", "views", "table", "columns", "indexes", "constraints"].includes(node.type);
     const isLeaf = ["column", "index", "constraint", "view"].includes(node.type);
+    const isClickable = node.type === "data" || !isLeaf;
 
     return (
       <div class="tree-node">
         <div
           class={`tree-node-content ${node.type}`}
           style={{ "padding-left": `${depth * 16 + 8}px` }}
-          onClick={() => !isLeaf && handleToggle(node)}
+          onClick={() => isClickable && handleToggle(node)}
         >
           <span class="tree-icon">
             {node.loading ? (
               "..."
-            ) : isLeaf ? (
+            ) : isLeaf || node.type === "data" ? (
               ""
             ) : node.expanded ? (
               <CaretDown size={12} />

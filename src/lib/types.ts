@@ -64,6 +64,7 @@ export interface TreeNode {
     | "table"
     | "views"
     | "view"
+    | "data"
     | "columns"
     | "column"
     | "indexes"

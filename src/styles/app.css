@@ -139,6 +139,15 @@ body {
   font-size: 12px;
 }
 
+.tree-node-content.data {
+  cursor: pointer;
+}
+
+.tree-node-content.data .tree-label {
+  color: var(--text-primary);
+  font-size: 12px;
+}
+
 .tree-node-content.column .tree-label,
 .tree-node-content.index .tree-label,
 .tree-node-content.constraint .tree-label {
