@@ -1,7 +1,7 @@
 // ABOUTME: Modal form for creating and editing database connections.
-// ABOUTME: Supports PostgreSQL and MySQL connection configuration.
+// ABOUTME: Supports PostgreSQL, MySQL, and SQLite connection configuration.
 
-import { createSignal } from "solid-js";
+import { createSignal, Show } from "solid-js";
 import type { DatabaseType, SaveConnectionInput } from "../lib/types";
 import { saveConnection } from "../lib/tauri";
 
@@ -18,12 +18,17 @@ export function ConnectionForm(props: Props) {
   const [username, setUsername] = createSignal("");
   const [password, setPassword] = createSignal("");
   const [database, setDatabase] = createSignal("");
+  const [filePath, setFilePath] = createSignal("");
   const [error, setError] = createSignal<string | null>(null);
   const [saving, setSaving] = createSignal(false);
 
   const handleDbTypeChange = (type: DatabaseType) => {
     setDbType(type);
-    setPort(type === "postgres" ? 5432 : 3306);
+    if (type === "postgres") {
+      setPort(5432);
+    } else if (type === "mysql") {
+      setPort(3306);
+    }
   };
 
   const handleSubmit = async (e: Event) => {
@@ -35,11 +40,12 @@ export function ConnectionForm(props: Props) {
       const input: SaveConnectionInput = {
         name: name(),
         db_type: dbType(),
-        host: host(),
-        port: port(),
-        username: username(),
-        password: password(),
-        database: database() || null,
+        // For SQLite, host stores the file path
+        host: dbType() === "sqlite" ? filePath() : host(),
+        port: dbType() === "sqlite" ? 0 : port(),
+        username: dbType() === "sqlite" ? "" : username(),
+        password: dbType() === "sqlite" ? "" : password(),
+        database: dbType() === "sqlite" ? null : database() || null,
       };
       await saveConnection(input);
       props.onSaved();
@@ -50,6 +56,8 @@ export function ConnectionForm(props: Props) {
       setSaving(false);
     }
   };
+
+  const isServerBased = () => dbType() !== "sqlite";
 
   return (
     <div class="modal-overlay" onClick={() => props.onClose()}>
@@ -89,65 +97,90 @@ export function ConnectionForm(props: Props) {
                 />
                 MySQL
               </label>
+              <label>
+                <input
+                  type="radio"
+                  name="dbType"
+                  checked={dbType() === "sqlite"}
+                  onChange={() => handleDbTypeChange("sqlite")}
+                />
+                SQLite
+              </label>
             </div>
           </div>
 
-          <div class="form-row">
-            <div class="form-group flex-1">
-              <label for="host">Host</label>
+          <Show when={dbType() === "sqlite"}>
+            <div class="form-group">
+              <label for="filePath">Database File Path</label>
               <input
-                id="host"
+                id="filePath"
                 type="text"
-                value={host()}
-                onInput={(e) => setHost(e.currentTarget.value)}
-                placeholder="localhost"
+                value={filePath()}
+                onInput={(e) => setFilePath(e.currentTarget.value)}
+                placeholder="/path/to/database.db"
                 required
               />
             </div>
-            <div class="form-group port-field">
-              <label for="port">Port</label>
-              <input
-                id="port"
-                type="number"
-                value={port()}
-                onInput={(e) => setPort(parseInt(e.currentTarget.value) || 0)}
-                required
-              />
-            </div>
-          </div>
+          </Show>
 
-          <div class="form-row">
-            <div class="form-group flex-1">
-              <label for="username">Username</label>
+          <Show when={isServerBased()}>
+            <div class="form-row">
+              <div class="form-group flex-1">
+                <label for="host">Host</label>
+                <input
+                  id="host"
+                  type="text"
+                  value={host()}
+                  onInput={(e) => setHost(e.currentTarget.value)}
+                  placeholder="localhost"
+                  required
+                />
+              </div>
+              <div class="form-group port-field">
+                <label for="port">Port</label>
+                <input
+                  id="port"
+                  type="number"
+                  value={port()}
+                  onInput={(e) => setPort(parseInt(e.currentTarget.value) || 0)}
+                  required
+                />
+              </div>
+            </div>
+
+            <div class="form-row">
+              <div class="form-group flex-1">
+                <label for="username">Username</label>
+                <input
+                  id="username"
+                  type="text"
+                  value={username()}
+                  onInput={(e) => setUsername(e.currentTarget.value)}
+                  required
+                />
+              </div>
+              <div class="form-group flex-1">
+                <label for="password">Password</label>
+                <input
+                  id="password"
+                  type="password"
+                  value={password()}
+                  onInput={(e) => setPassword(e.currentTarget.value)}
+                />
+              </div>
+            </div>
+
+            <div class="form-group">
+              <label for="database">Database (optional)</label>
               <input
-                id="username"
+                id="database"
                 type="text"
-                value={username()}
-                onInput={(e) => setUsername(e.currentTarget.value)}
-                required
+                value={database()}
+                onInput={(e) => setDatabase(e.currentTarget.value)}
+                placeholder="Leave empty to browse all"
               />
             </div>
-            <div class="form-group flex-1">
-              <label for="password">Password</label>
-              <input
-                id="password"
-                type="password"
-                value={password()}
-                onInput={(e) => setPassword(e.currentTarget.value)}
-              />
-            </div>
-          </div>
-
-          <div class="form-group">
-            <label for="database">Database (optional)</label>
-            <input
-              id="database"
-              type="text"
-              value={database()}
-              onInput={(e) => setDatabase(e.currentTarget.value)}
-              placeholder="Leave empty to browse all"
-            />
-          </div>
+          </Show>
 
           {error() && <div class="error">{error()}</div>}
 

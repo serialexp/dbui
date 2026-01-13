@@ -1,7 +1,7 @@
 // ABOUTME: Shared TypeScript types for the DBUI frontend.
 // ABOUTME: Mirrors Rust structs for type-safe communication.
 
-export type DatabaseType = "postgres" | "mysql";
+export type DatabaseType = "postgres" | "mysql" | "sqlite";
 
 export interface ConnectionConfig {
   id: string;

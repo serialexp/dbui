@@ -5,7 +5,7 @@ import { onMount, onCleanup, createEffect } from "solid-js";
 import { EditorState } from "@codemirror/state";
 import { EditorView, keymap } from "@codemirror/view";
 import { basicSetup } from "codemirror";
-import { sql, PostgreSQL, MySQL } from "@codemirror/lang-sql";
+import { sql, PostgreSQL, MySQL, SQLite } from "@codemirror/lang-sql";
 import { oneDark } from "@codemirror/theme-one-dark";
 import type { DatabaseType } from "../lib/types";
 
@@ -24,7 +24,12 @@ export function QueryEditor(props: Props) {
   onMount(() => {
     if (!containerRef) return;
 
-    const dialect = props.dbType === "mysql" ? MySQL : PostgreSQL;
+    const dialect =
+      props.dbType === "mysql"
+        ? MySQL
+        : props.dbType === "sqlite"
+          ? SQLite
+          : PostgreSQL;
 
     const state = EditorState.create({
       doc: props.value,

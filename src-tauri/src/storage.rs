@@ -11,6 +11,7 @@ use uuid::Uuid;
 pub enum DatabaseType {
     Postgres,
     Mysql,
+    Sqlite,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

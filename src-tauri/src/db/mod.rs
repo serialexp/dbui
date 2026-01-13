@@ -1,8 +1,9 @@
 // ABOUTME: Database connection management and query execution.
-// ABOUTME: Supports PostgreSQL and MySQL with runtime driver selection.
+// ABOUTME: Supports PostgreSQL, MySQL, and SQLite with runtime driver selection.
 
 pub mod mysql;
 pub mod postgres;
+pub mod sqlite;
 
 use crate::storage::{ConnectionConfig, DatabaseType};
 use serde::{Deserialize, Serialize};
@@ -49,6 +50,7 @@ pub struct QueryResult {
 pub enum ConnectionPool {
     Postgres(sqlx::PgPool),
     Mysql(sqlx::MySqlPool),
+    Sqlite(sqlx::SqlitePool),
 }
 
 pub struct ConnectionManager {
@@ -94,6 +96,14 @@ impl ConnectionManager {
                     .map_err(|e| format!("Failed to connect to MySQL: {}", e))?;
                 ConnectionPool::Mysql(pool)
             }
+            DatabaseType::Sqlite => {
+                // For SQLite, host field contains the file path
+                let url = format!("sqlite:{}", config.host);
+                let pool = sqlx::SqlitePool::connect(&url)
+                    .await
+                    .map_err(|e| format!("Failed to connect to SQLite: {}", e))?;
+                ConnectionPool::Sqlite(pool)
+            }
         };
 
         let mut pools = self.pools.write().await;
@@ -122,6 +132,7 @@ impl ConnectionManager {
         match pool.as_ref() {
             ConnectionPool::Postgres(p) => postgres::list_databases(p).await,
             ConnectionPool::Mysql(p) => mysql::list_databases(p).await,
+            ConnectionPool::Sqlite(p) => sqlite::list_databases(p).await,
         }
     }
 
@@ -134,6 +145,7 @@ impl ConnectionManager {
         match pool.as_ref() {
             ConnectionPool::Postgres(p) => postgres::list_schemas(p, database).await,
             ConnectionPool::Mysql(p) => mysql::list_schemas(p, database).await,
+            ConnectionPool::Sqlite(p) => sqlite::list_schemas(p, database).await,
         }
     }
 
@@ -147,6 +159,7 @@ impl ConnectionManager {
         match pool.as_ref() {
             ConnectionPool::Postgres(p) => postgres::list_tables(p, database, schema).await,
             ConnectionPool::Mysql(p) => mysql::list_tables(p, database, schema).await,
+            ConnectionPool::Sqlite(p) => sqlite::list_tables(p, database, schema).await,
         }
     }
 
@@ -160,6 +173,7 @@ impl ConnectionManager {
         match pool.as_ref() {
             ConnectionPool::Postgres(p) => postgres::list_views(p, database, schema).await,
             ConnectionPool::Mysql(p) => mysql::list_views(p, database, schema).await,
+            ConnectionPool::Sqlite(p) => sqlite::list_views(p, database, schema).await,
         }
     }
 
@@ -174,6 +188,7 @@ impl ConnectionManager {
         match pool.as_ref() {
             ConnectionPool::Postgres(p) => postgres::list_columns(p, database, schema, table).await,
             ConnectionPool::Mysql(p) => mysql::list_columns(p, database, schema, table).await,
+            ConnectionPool::Sqlite(p) => sqlite::list_columns(p, database, schema, table).await,
         }
     }
 
@@ -188,6 +203,7 @@ impl ConnectionManager {
         match pool.as_ref() {
             ConnectionPool::Postgres(p) => postgres::list_indexes(p, database, schema, table).await,
             ConnectionPool::Mysql(p) => mysql::list_indexes(p, database, schema, table).await,
+            ConnectionPool::Sqlite(p) => sqlite::list_indexes(p, database, schema, table).await,
         }
     }
 
@@ -204,6 +220,7 @@ impl ConnectionManager {
                 postgres::list_constraints(p, database, schema, table).await
             }
             ConnectionPool::Mysql(p) => mysql::list_constraints(p, database, schema, table).await,
+            ConnectionPool::Sqlite(p) => sqlite::list_constraints(p, database, schema, table).await,
         }
     }
 
@@ -216,6 +233,7 @@ impl ConnectionManager {
         match pool.as_ref() {
             ConnectionPool::Postgres(p) => execute_query_pg(p, query).await,
             ConnectionPool::Mysql(p) => execute_query_mysql(p, query).await,
+            ConnectionPool::Sqlite(p) => execute_query_sqlite(p, query).await,
         }
     }
 }
@@ -356,6 +374,73 @@ fn mysql_value_to_json(
             .map(|v| serde_json::Value::Number(v.into()))
             .unwrap_or(serde_json::Value::Null),
         "FLOAT" | "DOUBLE" | "DECIMAL" => row
+            .try_get::<f64, _>(index)
+            .ok()
+            .and_then(|v| serde_json::Number::from_f64(v))
+            .map(serde_json::Value::Number)
+            .unwrap_or(serde_json::Value::Null),
+        _ => row
+            .try_get::<String, _>(index)
+            .ok()
+            .map(serde_json::Value::String)
+            .unwrap_or(serde_json::Value::Null),
+    }
+}
+
+async fn execute_query_sqlite(pool: &sqlx::SqlitePool, query: &str) -> Result<QueryResult, String> {
+    let rows = sqlx::query(query)
+        .fetch_all(pool)
+        .await
+        .map_err(|e| format!("Query failed: {}", e))?;
+
+    if rows.is_empty() {
+        return Ok(QueryResult {
+            columns: vec![],
+            rows: vec![],
+            row_count: 0,
+        });
+    }
+
+    let columns: Vec<String> = rows[0]
+        .columns()
+        .iter()
+        .map(|c| c.name().to_string())
+        .collect();
+
+    let mut result_rows = Vec::new();
+    for row in &rows {
+        let mut row_values = Vec::new();
+        for (i, col) in row.columns().iter().enumerate() {
+            let value = sqlite_value_to_json(&row, i, col.type_info().name());
+            row_values.push(value);
+        }
+        result_rows.push(row_values);
+    }
+
+    Ok(QueryResult {
+        columns,
+        row_count: result_rows.len(),
+        rows: result_rows,
+    })
+}
+
+fn sqlite_value_to_json(
+    row: &sqlx::sqlite::SqliteRow,
+    index: usize,
+    type_name: &str,
+) -> serde_json::Value {
+    match type_name {
+        "BOOLEAN" => row
+            .try_get::<bool, _>(index)
+            .ok()
+            .map(serde_json::Value::Bool)
+            .unwrap_or(serde_json::Value::Null),
+        "INTEGER" => row
+            .try_get::<i64, _>(index)
+            .ok()
+            .map(|v| serde_json::Value::Number(v.into()))
+            .unwrap_or(serde_json::Value::Null),
+        "REAL" => row
             .try_get::<f64, _>(index)
             .ok()
             .and_then(|v| serde_json::Number::from_f64(v))
