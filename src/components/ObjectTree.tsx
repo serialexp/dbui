@@ -253,9 +253,10 @@ export function ObjectTree(props: Props) {
     const isLeaf = ["column", "index", "constraint", "view"].includes(node.type);
 
     return (
-      <div class="tree-node" style={{ "padding-left": `${depth * 16}px` }}>
+      <div class="tree-node">
         <div
           class={`tree-node-content ${node.type}`}
+          style={{ "padding-left": `${depth * 16 + 8}px` }}
           onClick={() => !isLeaf && handleToggle(node)}
         >
           <span class="tree-icon">
