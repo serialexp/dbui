@@ -32,17 +32,17 @@ function App() {
     setError(null);
   };
 
-  const handleTableSelect = (database: string, schema: string, table: string) => {
+  const handleTableSelect = async (database: string, schema: string, table: string) => {
     const newQuery = `SELECT * FROM ${schema}.${table} LIMIT 100;`;
     setQuery(newQuery);
-    handleExecute(newQuery);
+    await handleExecute(newQuery);
   };
 
   const handleQueryGenerate = (query: string) => {
     setQuery(query);
   };
 
-  const handleExecute = async (queryToExecute?: string) => {
+  const handleExecute = async (queryToExecute: string) => {
     const connId = activeConnectionId();
     if (!connId) {
       setError("No connection selected");
@@ -54,7 +54,7 @@ function App() {
     setResult(null);
 
     try {
-      const res = await executeQuery(connId, queryToExecute ?? query());
+      const res = await executeQuery(connId, queryToExecute);
       setResult(res);
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
