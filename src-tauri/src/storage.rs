@@ -3,7 +3,7 @@
 
 use serde::{Deserialize, Serialize};
 use std::fs;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use uuid::Uuid;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -49,16 +49,13 @@ impl ConnectionConfig {
     }
 }
 
-fn config_path() -> PathBuf {
-    let config_dir = dirs::config_dir()
-        .unwrap_or_else(|| PathBuf::from("."))
-        .join("dbui");
-    fs::create_dir_all(&config_dir).ok();
+fn connections_file_path(config_dir: &Path) -> PathBuf {
+    fs::create_dir_all(config_dir).ok();
     config_dir.join("connections.json")
 }
 
-pub fn load_connections() -> Vec<ConnectionConfig> {
-    let path = config_path();
+pub fn load_connections(config_dir: &Path) -> Vec<ConnectionConfig> {
+    let path = connections_file_path(config_dir);
     if !path.exists() {
         return Vec::new();
     }
@@ -69,23 +66,23 @@ pub fn load_connections() -> Vec<ConnectionConfig> {
         .unwrap_or_default()
 }
 
-pub fn save_connections(connections: &[ConnectionConfig]) -> Result<(), String> {
-    let path = config_path();
+pub fn save_connections(config_dir: &Path, connections: &[ConnectionConfig]) -> Result<(), String> {
+    let path = connections_file_path(config_dir);
     let content = serde_json::to_string_pretty(connections)
         .map_err(|e| format!("Failed to serialize connections: {}", e))?;
     fs::write(&path, content)
         .map_err(|e| format!("Failed to write connections file: {}", e))
 }
 
-pub fn add_connection(config: ConnectionConfig) -> Result<ConnectionConfig, String> {
-    let mut connections = load_connections();
+pub fn add_connection(config_dir: &Path, config: ConnectionConfig) -> Result<ConnectionConfig, String> {
+    let mut connections = load_connections(config_dir);
     connections.push(config.clone());
-    save_connections(&connections)?;
+    save_connections(config_dir, &connections)?;
     Ok(config)
 }
 
-pub fn remove_connection(id: &str) -> Result<(), String> {
-    let mut connections = load_connections();
+pub fn remove_connection(config_dir: &Path, id: &str) -> Result<(), String> {
+    let mut connections = load_connections(config_dir);
     let original_len = connections.len();
     connections.retain(|c| c.id != id);
 
@@ -93,9 +90,9 @@ pub fn remove_connection(id: &str) -> Result<(), String> {
         return Err(format!("Connection with id '{}' not found", id));
     }
 
-    save_connections(&connections)
+    save_connections(config_dir, &connections)
 }
 
-pub fn get_connection(id: &str) -> Option<ConnectionConfig> {
-    load_connections().into_iter().find(|c| c.id == id)
+pub fn get_connection(config_dir: &Path, id: &str) -> Option<ConnectionConfig> {
+    load_connections(config_dir).into_iter().find(|c| c.id == id)
 }

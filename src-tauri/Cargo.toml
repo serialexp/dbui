@@ -21,5 +21,4 @@ sqlx = { version = "0.8", features = ["runtime-tokio", "postgres", "mysql", "sql
 tokio = { version = "1", features = ["full"] }
 thiserror = "2"
 uuid = { version = "1", features = ["v4", "serde"] }
-dirs = "6"
 

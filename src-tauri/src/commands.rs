@@ -4,6 +4,7 @@
 use crate::db::{ColumnInfo, ConnectionManager, ConstraintInfo, IndexInfo, QueryResult};
 use crate::storage::{self, ConnectionConfig, DatabaseType};
 use std::sync::OnceLock;
+use tauri::Manager;
 
 static CONNECTION_MANAGER: OnceLock<ConnectionManager> = OnceLock::new();
 
@@ -23,7 +24,9 @@ pub struct SaveConnectionInput {
 }
 
 #[tauri::command]
-pub fn save_connection(input: SaveConnectionInput) -> Result<ConnectionConfig, String> {
+pub fn save_connection(app: tauri::AppHandle, input: SaveConnectionInput) -> Result<ConnectionConfig, String> {
+    let config_dir = app.path().app_config_dir()
+        .map_err(|e| format!("Failed to get config directory: {}", e))?;
     let config = ConnectionConfig::new(
         input.name,
         input.db_type,
@@ -33,22 +36,28 @@ pub fn save_connection(input: SaveConnectionInput) -> Result<ConnectionConfig, S
         input.password,
         input.database,
     );
-    storage::add_connection(config)
+    storage::add_connection(&config_dir, config)
 }
 
 #[tauri::command]
-pub fn list_connections() -> Vec<ConnectionConfig> {
-    storage::load_connections()
+pub fn list_connections(app: tauri::AppHandle) -> Result<Vec<ConnectionConfig>, String> {
+    let config_dir = app.path().app_config_dir()
+        .map_err(|e| format!("Failed to get config directory: {}", e))?;
+    Ok(storage::load_connections(&config_dir))
 }
 
 #[tauri::command]
-pub fn delete_connection(id: String) -> Result<(), String> {
-    storage::remove_connection(&id)
+pub fn delete_connection(app: tauri::AppHandle, id: String) -> Result<(), String> {
+    let config_dir = app.path().app_config_dir()
+        .map_err(|e| format!("Failed to get config directory: {}", e))?;
+    storage::remove_connection(&config_dir, &id)
 }
 
 #[tauri::command]
-pub async fn connect(id: String) -> Result<String, String> {
-    let config = storage::get_connection(&id)
+pub async fn connect(app: tauri::AppHandle, id: String) -> Result<String, String> {
+    let config_dir = app.path().app_config_dir()
+        .map_err(|e| format!("Failed to get config directory: {}", e))?;
+    let config = storage::get_connection(&config_dir, &id)
         .ok_or_else(|| format!("Connection '{}' not found", id))?;
     get_manager().connect(&config).await
 }
