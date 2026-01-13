@@ -93,6 +93,26 @@ body {
   flex: 1;
   overflow: auto;
   padding: 8px 0;
+  scrollbar-width: thin;
+  scrollbar-color: var(--bg-hover) var(--bg-secondary);
+}
+
+/* Webkit scrollbar styling for object-tree */
+.object-tree::-webkit-scrollbar {
+  width: 8px;
+}
+
+.object-tree::-webkit-scrollbar-track {
+  background: var(--bg-secondary);
+}
+
+.object-tree::-webkit-scrollbar-thumb {
+  background: var(--bg-hover);
+  border-radius: 4px;
+}
+
+.object-tree::-webkit-scrollbar-thumb:hover {
+  background: var(--border-color);
 }
 
 .tree-node {
