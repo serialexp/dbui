@@ -164,12 +164,8 @@ export function QueryEditor(props: Props) {
           ".cm-scroller": {
             overflow: "auto",
           },
-          ".cm-query-highlight": {
-            backgroundColor: "rgba(120, 160, 200, 0.1)",
-            display: "inline",
-          },
           ".cm-line:has(.cm-query-highlight)": {
-            backgroundColor: "rgba(120, 160, 200, 0.08)",
+            backgroundColor: "rgba(120, 160, 200, 0.1)",
           },
         }),
       ],
