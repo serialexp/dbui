@@ -14,6 +14,7 @@ import plugsSvg from "@phosphor-icons/core/assets/regular/plugs.svg?raw";
 import plugsConnectedSvg from "@phosphor-icons/core/assets/regular/plugs-connected.svg?raw";
 import databaseSvg from "@phosphor-icons/core/assets/regular/database.svg?raw";
 import foldersSvg from "@phosphor-icons/core/assets/regular/folders.svg?raw";
+import dotOutlineSvg from "@phosphor-icons/core/assets/regular/dot-outline.svg?raw";
 import tableSvg from "@phosphor-icons/core/assets/regular/table.svg?raw";
 import eyeSvg from "@phosphor-icons/core/assets/regular/eye.svg?raw";
 import gridNineSvg from "@phosphor-icons/core/assets/regular/grid-nine.svg?raw";
@@ -292,7 +293,7 @@ export function ObjectTree(props: Props) {
       case "columns":
       case "indexes":
       case "constraints":
-        return null;
+        return <Icon svg={dotOutlineSvg} size={iconSize} />;
       case "table":
         return <Icon svg={tableSvg} size={iconSize} />;
       case "view":
