@@ -15,6 +15,7 @@ interface Props {
   activeConnectionId: string | null;
   onConnectionChange: (id: string | null) => void;
   onTableSelect: (database: string, schema: string, table: string) => void;
+  onQueryGenerate: (query: string) => void;
 }
 
 export function Sidebar(props: Props) {
@@ -78,6 +79,7 @@ export function Sidebar(props: Props) {
         activeConnectionId={props.activeConnectionId}
         onConnectionChange={props.onConnectionChange}
         onTableSelect={props.onTableSelect}
+        onQueryGenerate={props.onQueryGenerate}
         onDelete={handleDelete}
       />
 

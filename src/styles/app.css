@@ -149,7 +149,10 @@ body {
   font-size: 12px;
 }
 
-.tree-node-content.data {
+.tree-node-content.data,
+.tree-node-content.column,
+.tree-node-content.index,
+.tree-node-content.constraint {
   cursor: pointer;
 }
 

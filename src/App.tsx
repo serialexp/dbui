@@ -38,6 +38,10 @@ function App() {
     handleExecute(newQuery);
   };
 
+  const handleQueryGenerate = (query: string) => {
+    setQuery(query);
+  };
+
   const handleExecute = async (queryToExecute?: string) => {
     const connId = activeConnectionId();
     if (!connId) {
@@ -65,6 +69,7 @@ function App() {
         activeConnectionId={activeConnectionId()}
         onConnectionChange={handleConnectionChange}
         onTableSelect={handleTableSelect}
+        onQueryGenerate={handleQueryGenerate}
       />
       <main class="main-content">
         <QueryEditor

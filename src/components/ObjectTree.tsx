@@ -38,6 +38,7 @@ interface Props {
   activeConnectionId: string | null;
   onConnectionChange: (id: string | null) => void;
   onTableSelect: (database: string, schema: string, table: string) => void;
+  onQueryGenerate: (query: string) => void;
   onDelete: (id: string, e: Event) => void;
 }
 
@@ -253,6 +254,37 @@ export function ObjectTree(props: Props) {
           updateNode(node.id, { expanded: true, loading: false });
           return;
         }
+        case "column": {
+          const { column } = node.metadata as { column: any };
+          const query = `-- Column: ${column.name}
+-- Type: ${column.data_type}
+-- Nullable: ${column.is_nullable ? "YES" : "NO"}
+-- Default: ${column.column_default ?? "NULL"}
+-- Primary Key: ${column.is_primary_key ? "YES" : "NO"}`;
+          props.onQueryGenerate(query);
+          return;
+        }
+        case "index": {
+          const { index } = node.metadata as { index: any };
+          const query = `-- Index: ${index.name}
+-- Columns: ${index.columns.join(", ")}
+-- Unique: ${index.is_unique ? "YES" : "NO"}
+-- Primary: ${index.is_primary ? "YES" : "NO"}`;
+          props.onQueryGenerate(query);
+          return;
+        }
+        case "constraint": {
+          const { constraint } = node.metadata as { constraint: any };
+          let query = `-- Constraint: ${constraint.name}
+-- Type: ${constraint.constraint_type}
+-- Columns: ${constraint.columns.join(", ")}`;
+          if (constraint.foreign_table) {
+            query += `
+-- References: ${constraint.foreign_table} (${constraint.foreign_columns?.join(", ") ?? ""})`;
+          }
+          props.onQueryGenerate(query);
+          return;
+        }
         case "columns":
         case "indexes":
         case "constraints": {
@@ -315,8 +347,8 @@ export function ObjectTree(props: Props) {
     const hasChildren =
       node.children && node.children.length > 0 ||
       ["connection", "database", "schema", "tables", "views", "table", "columns", "indexes", "constraints"].includes(node.type);
-    const isLeaf = ["column", "index", "constraint", "view"].includes(node.type);
-    const isClickable = node.type === "data" || !isLeaf;
+    const isLeaf = ["view"].includes(node.type);
+    const isClickable = ["data", "column", "index", "constraint"].includes(node.type) || !isLeaf;
 
     return (
       <div class="tree-node">
@@ -328,7 +360,7 @@ export function ObjectTree(props: Props) {
           <span class="tree-icon">
             {node.loading ? (
               "..."
-            ) : isLeaf || node.type === "data" ? (
+            ) : isLeaf || ["data", "column", "index", "constraint"].includes(node.type) ? (
               ""
             ) : node.expanded ? (
               <Icon svg={caretDownSvg} size={12} />
