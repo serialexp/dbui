@@ -20,6 +20,7 @@ interface Props {
   activeConnectionId: string | null;
   onConnectionChange: (id: string | null) => void;
   onTableSelect: (database: string, schema: string, table: string) => void;
+  onDelete: (id: string, e: Event) => void;
 }
 
 export function ObjectTree(props: Props) {
@@ -268,15 +269,27 @@ export function ObjectTree(props: Props) {
             )}
           </span>
           <span class="tree-label">{node.label}</span>
-          <Show when={node.type === "connection" && node.expanded}>
+          <Show when={node.type === "connection"}>
+            <Show when={node.expanded}>
+              <button
+                class="disconnect-btn"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  handleDisconnect(node);
+                }}
+              >
+                ×
+              </button>
+            </Show>
             <button
-              class="disconnect-btn"
+              class="delete-btn"
               onClick={(e) => {
                 e.stopPropagation();
-                handleDisconnect(node);
+                const config = node.metadata?.config as ConnectionConfig;
+                props.onDelete(config.id, e);
               }}
             >
-              ×
+              🗑
             </button>
           </Show>
         </div>

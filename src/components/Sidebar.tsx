@@ -64,6 +64,7 @@ export function Sidebar(props: Props) {
         activeConnectionId={props.activeConnectionId}
         onConnectionChange={props.onConnectionChange}
         onTableSelect={props.onTableSelect}
+        onDelete={handleDelete}
       />
 
       <Show when={showForm()}>
