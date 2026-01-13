@@ -311,6 +311,27 @@ body {
   flex: 1;
   overflow: auto;
   background: var(--bg-primary);
+  scrollbar-width: thin;
+  scrollbar-color: var(--bg-hover) var(--bg-primary);
+}
+
+/* Webkit scrollbar styling for results-content */
+.results-content::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+.results-content::-webkit-scrollbar-track {
+  background: var(--bg-primary);
+}
+
+.results-content::-webkit-scrollbar-thumb {
+  background: var(--bg-hover);
+  border-radius: 4px;
+}
+
+.results-content::-webkit-scrollbar-thumb:hover {
+  background: var(--border-color);
 }
 
 .table-wrapper {
