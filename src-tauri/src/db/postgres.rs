@@ -5,10 +5,11 @@ use super::{ColumnInfo, ConstraintInfo, IndexInfo};
 use sqlx::Row;
 
 pub async fn list_databases(pool: &sqlx::PgPool) -> Result<Vec<String>, String> {
-    let rows = sqlx::query("SELECT datname FROM pg_database WHERE datistemplate = false ORDER BY datname")
-        .fetch_all(pool)
-        .await
-        .map_err(|e| format!("Failed to list databases: {}", e))?;
+    let rows =
+        sqlx::query("SELECT datname FROM pg_database WHERE datistemplate = false ORDER BY datname")
+            .fetch_all(pool)
+            .await
+            .map_err(|e| format!("Failed to list databases: {}", e))?;
 
     Ok(rows.iter().map(|r| r.get("datname")).collect())
 }

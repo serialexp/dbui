@@ -161,6 +161,7 @@ body {
   align-items: center;
   justify-content: center;
   padding: 0;
+  pointer-events: auto;
 }
 
 .tree-node-content:hover .disconnect-btn,

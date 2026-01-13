@@ -70,11 +70,13 @@ pub fn save_connections(config_dir: &Path, connections: &[ConnectionConfig]) -> 
     let path = connections_file_path(config_dir);
     let content = serde_json::to_string_pretty(connections)
         .map_err(|e| format!("Failed to serialize connections: {}", e))?;
-    fs::write(&path, content)
-        .map_err(|e| format!("Failed to write connections file: {}", e))
+    fs::write(&path, content).map_err(|e| format!("Failed to write connections file: {}", e))
 }
 
-pub fn add_connection(config_dir: &Path, config: ConnectionConfig) -> Result<ConnectionConfig, String> {
+pub fn add_connection(
+    config_dir: &Path,
+    config: ConnectionConfig,
+) -> Result<ConnectionConfig, String> {
     let mut connections = load_connections(config_dir);
     connections.push(config.clone());
     save_connections(config_dir, &connections)?;
@@ -94,5 +96,7 @@ pub fn remove_connection(config_dir: &Path, id: &str) -> Result<(), String> {
 }
 
 pub fn get_connection(config_dir: &Path, id: &str) -> Option<ConnectionConfig> {
-    load_connections(config_dir).into_iter().find(|c| c.id == id)
+    load_connections(config_dir)
+        .into_iter()
+        .find(|c| c.id == id)
 }

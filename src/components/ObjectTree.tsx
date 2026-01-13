@@ -286,6 +286,7 @@ export function ObjectTree(props: Props) {
               class="delete-btn"
               onClick={(e) => {
                 e.stopPropagation();
+                console.log("Delete clicked", node);
                 const config = node.metadata?.config as ConnectionConfig;
                 props.onDelete(config.id, e);
               }}

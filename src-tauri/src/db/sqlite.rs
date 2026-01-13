@@ -9,7 +9,10 @@ pub async fn list_databases(_pool: &sqlx::SqlitePool) -> Result<Vec<String>, Str
     Ok(vec!["main".to_string()])
 }
 
-pub async fn list_schemas(_pool: &sqlx::SqlitePool, _database: &str) -> Result<Vec<String>, String> {
+pub async fn list_schemas(
+    _pool: &sqlx::SqlitePool,
+    _database: &str,
+) -> Result<Vec<String>, String> {
     // SQLite doesn't have schemas, return "main" as the single schema
     Ok(vec!["main".to_string()])
 }
@@ -34,12 +37,10 @@ pub async fn list_views(
     _database: &str,
     _schema: &str,
 ) -> Result<Vec<String>, String> {
-    let rows = sqlx::query(
-        "SELECT name FROM sqlite_master WHERE type = 'view' ORDER BY name",
-    )
-    .fetch_all(pool)
-    .await
-    .map_err(|e| format!("Failed to list views: {}", e))?;
+    let rows = sqlx::query("SELECT name FROM sqlite_master WHERE type = 'view' ORDER BY name")
+        .fetch_all(pool)
+        .await
+        .map_err(|e| format!("Failed to list views: {}", e))?;
 
     Ok(rows.iter().map(|r| r.get("name")).collect())
 }

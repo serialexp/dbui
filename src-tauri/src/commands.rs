@@ -24,8 +24,13 @@ pub struct SaveConnectionInput {
 }
 
 #[tauri::command]
-pub fn save_connection(app: tauri::AppHandle, input: SaveConnectionInput) -> Result<ConnectionConfig, String> {
-    let config_dir = app.path().app_config_dir()
+pub fn save_connection(
+    app: tauri::AppHandle,
+    input: SaveConnectionInput,
+) -> Result<ConnectionConfig, String> {
+    let config_dir = app
+        .path()
+        .app_config_dir()
         .map_err(|e| format!("Failed to get config directory: {}", e))?;
     let config = ConnectionConfig::new(
         input.name,
@@ -41,21 +46,27 @@ pub fn save_connection(app: tauri::AppHandle, input: SaveConnectionInput) -> Res
 
 #[tauri::command]
 pub fn list_connections(app: tauri::AppHandle) -> Result<Vec<ConnectionConfig>, String> {
-    let config_dir = app.path().app_config_dir()
+    let config_dir = app
+        .path()
+        .app_config_dir()
         .map_err(|e| format!("Failed to get config directory: {}", e))?;
     Ok(storage::load_connections(&config_dir))
 }
 
 #[tauri::command]
 pub fn delete_connection(app: tauri::AppHandle, id: String) -> Result<(), String> {
-    let config_dir = app.path().app_config_dir()
+    let config_dir = app
+        .path()
+        .app_config_dir()
         .map_err(|e| format!("Failed to get config directory: {}", e))?;
     storage::remove_connection(&config_dir, &id)
 }
 
 #[tauri::command]
 pub async fn connect(app: tauri::AppHandle, id: String) -> Result<String, String> {
-    let config_dir = app.path().app_config_dir()
+    let config_dir = app
+        .path()
+        .app_config_dir()
         .map_err(|e| format!("Failed to get config directory: {}", e))?;
     let config = storage::get_connection(&config_dir, &id)
         .ok_or_else(|| format!("Connection '{}' not found", id))?;
@@ -136,9 +147,6 @@ pub async fn list_constraints(
 }
 
 #[tauri::command]
-pub async fn execute_query(
-    connection_id: String,
-    query: String,
-) -> Result<QueryResult, String> {
+pub async fn execute_query(connection_id: String, query: String) -> Result<QueryResult, String> {
     get_manager().execute_query(&connection_id, &query).await
 }
