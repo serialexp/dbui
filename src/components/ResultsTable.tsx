@@ -11,6 +11,8 @@ interface Props {
 }
 
 export function ResultsTable(props: Props) {
+  const MAX_DISPLAY_ROWS = 1000;
+
   const formatValue = (value: unknown): string => {
     if (value === null || value === undefined) {
       return "NULL";
@@ -21,12 +23,26 @@ export function ResultsTable(props: Props) {
     return String(value);
   };
 
+  const displayRows = () => {
+    if (!props.result) return [];
+    return props.result.rows.slice(0, MAX_DISPLAY_ROWS);
+  };
+
+  const isLimited = () => {
+    return props.result && props.result.rows.length > MAX_DISPLAY_ROWS;
+  };
+
   return (
     <div class="results-table">
       <div class="results-header">
         <span>Results</span>
         <Show when={props.result}>
-          <span class="row-count">{props.result!.row_count} rows</span>
+          <span class="row-count">
+            {props.result!.row_count} rows
+            <Show when={isLimited()}>
+              {" "}(showing first {MAX_DISPLAY_ROWS})
+            </Show>
+          </span>
         </Show>
       </div>
 
@@ -54,7 +70,7 @@ export function ResultsTable(props: Props) {
                   </tr>
                 </thead>
                 <tbody>
-                  <For each={props.result!.rows}>
+                  <For each={displayRows()}>
                     {(row) => (
                       <tr>
                         <For each={row}>
