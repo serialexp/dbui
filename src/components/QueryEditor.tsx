@@ -166,7 +166,6 @@ export function QueryEditor(props: Props) {
           },
           ".cm-query-highlight": {
             backgroundColor: "rgba(120, 160, 200, 0.15)",
-            borderLeft: "2px solid rgba(120, 160, 200, 0.5)",
           },
         }),
       ],
