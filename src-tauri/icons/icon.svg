@@ -28,9 +28,9 @@
   <path d="M136 260 Q136 300 256 300 Q376 300 376 260"
         stroke="#e0f2fe" stroke-width="3" fill="none" opacity="0.6"/>
 
-  <!-- Bottom ellipse (visible part) -->
+  <!-- Bottom curve -->
   <path d="M136 320 Q136 360 256 360 Q376 360 376 320"
-        fill="#1e40af" opacity="0.3"/>
+        stroke="#1e40af" stroke-width="3" fill="none" opacity="0.5"/>
 
   <!-- Highlight on top -->
   <ellipse cx="256" cy="140" rx="100" ry="30" fill="#ffffff" opacity="0.3"/>
