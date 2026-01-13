@@ -8,10 +8,27 @@
       <stop offset="0%" style="stop-color:#60a5fa;stop-opacity:1" />
       <stop offset="100%" style="stop-color:#3b82f6;stop-opacity:1" />
     </linearGradient>
+    <!-- Specular highlight gradient -->
+    <linearGradient id="specular" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#ffffff;stop-opacity:0.4" />
+      <stop offset="50%" style="stop-color:#ffffff;stop-opacity:0" />
+    </linearGradient>
+    <!-- Drop shadow filter -->
+    <filter id="shadow" x="-10%" y="-10%" width="130%" height="130%">
+      <feDropShadow dx="0" dy="4" stdDeviation="8" flood-color="#000000" flood-opacity="0.25"/>
+    </filter>
   </defs>
 
-  <!-- Background rounded rect - macOS style ~22% corner radius -->
-  <rect x="50" y="50" width="412" height="412" rx="90" ry="90" fill="url(#grad1)"/>
+  <!-- Background rounded rect with shadow -->
+  <rect x="50" y="50" width="412" height="412" rx="90" ry="90" fill="url(#grad1)" filter="url(#shadow)"/>
+
+  <!-- Specular highlight on top-left -->
+  <path d="M140 50
+           Q50 50 50 140
+           L50 120
+           Q50 58 112 52
+           L140 50 Z"
+        fill="url(#specular)"/>
 
   <!-- Database cylinder -->
   <!-- Top ellipse -->
