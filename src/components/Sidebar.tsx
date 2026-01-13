@@ -2,12 +2,14 @@
 // ABOUTME: Provides connection management and database navigation.
 
 import { createSignal, Show, onMount } from "solid-js";
-import { Plus } from "phosphor-solid";
+import { Icon } from "./Icon";
 import { confirm } from "@tauri-apps/plugin-dialog";
 import type { ConnectionConfig } from "../lib/types";
 import { listConnections, deleteConnection } from "../lib/tauri";
 import { ConnectionForm } from "./ConnectionForm";
 import { ObjectTree } from "./ObjectTree";
+
+import plusSvg from "@phosphor-icons/core/assets/regular/plus.svg?raw";
 
 interface Props {
   activeConnectionId: string | null;
@@ -63,7 +65,7 @@ export function Sidebar(props: Props) {
       <div class="sidebar-header">
         <h2>Connections</h2>
         <button class="add-btn" onClick={() => setShowForm(true)}>
-          <Plus size={16} weight="bold" />
+          <Icon svg={plusSvg} size={16} />
         </button>
       </div>
 

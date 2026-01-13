@@ -2,24 +2,25 @@
 // ABOUTME: Shows connections, databases, schemas, tables, and their metadata.
 
 import { createSignal, createEffect, For, Show } from "solid-js";
-import {
-  CaretRight,
-  CaretDown,
-  X,
-  Trash,
-  Plugs,
-  Database,
-  Folder,
-  FolderOpen,
-  Table,
-  Eye,
-  GridNine,
-  Columns,
-  Rows,
-  Lightning,
-  Lock,
-} from "phosphor-solid";
+import { Icon } from "./Icon";
 import type { TreeNode, ConnectionConfig } from "../lib/types";
+
+// Import Phosphor icons as raw SVG strings
+import caretRightSvg from "@phosphor-icons/core/assets/regular/caret-right.svg?raw";
+import caretDownSvg from "@phosphor-icons/core/assets/regular/caret-down.svg?raw";
+import xSvg from "@phosphor-icons/core/assets/regular/x.svg?raw";
+import trashSvg from "@phosphor-icons/core/assets/regular/trash.svg?raw";
+import plugsConnectedSvg from "@phosphor-icons/core/assets/regular/plugs-connected.svg?raw";
+import databaseSvg from "@phosphor-icons/core/assets/regular/database.svg?raw";
+import folderSvg from "@phosphor-icons/core/assets/regular/folder.svg?raw";
+import folderOpenSvg from "@phosphor-icons/core/assets/regular/folder-open.svg?raw";
+import tableSvg from "@phosphor-icons/core/assets/regular/table.svg?raw";
+import eyeSvg from "@phosphor-icons/core/assets/regular/eye.svg?raw";
+import gridNineSvg from "@phosphor-icons/core/assets/regular/grid-nine.svg?raw";
+import columnsSvg from "@phosphor-icons/core/assets/regular/columns.svg?raw";
+import rowsSvg from "@phosphor-icons/core/assets/regular/rows.svg?raw";
+import lightningSvg from "@phosphor-icons/core/assets/regular/lightning.svg?raw";
+import lockSvg from "@phosphor-icons/core/assets/regular/lock.svg?raw";
 import {
   connect,
   disconnect,
@@ -282,33 +283,33 @@ export function ObjectTree(props: Props) {
     const iconSize = 14;
     switch (node.type) {
       case "connection":
-        return <Plugs size={iconSize} />;
+        return <Icon svg={plugsConnectedSvg} size={iconSize} />;
       case "database":
-        return <Database size={iconSize} />;
+        return <Icon svg={databaseSvg} size={iconSize} />;
       case "schema":
-        return node.expanded ? <FolderOpen size={iconSize} /> : <Folder size={iconSize} />;
+        return <Icon svg={node.expanded ? folderOpenSvg : folderSvg} size={iconSize} />;
       case "tables":
-        return node.expanded ? <FolderOpen size={iconSize} /> : <Folder size={iconSize} />;
+        return <Icon svg={node.expanded ? folderOpenSvg : folderSvg} size={iconSize} />;
       case "table":
-        return <Table size={iconSize} />;
+        return <Icon svg={tableSvg} size={iconSize} />;
       case "views":
-        return node.expanded ? <FolderOpen size={iconSize} /> : <Folder size={iconSize} />;
+        return <Icon svg={node.expanded ? folderOpenSvg : folderSvg} size={iconSize} />;
       case "view":
-        return <Eye size={iconSize} />;
+        return <Icon svg={eyeSvg} size={iconSize} />;
       case "data":
-        return <GridNine size={iconSize} />;
+        return <Icon svg={gridNineSvg} size={iconSize} />;
       case "columns":
-        return <Columns size={iconSize} />;
+        return <Icon svg={columnsSvg} size={iconSize} />;
       case "column":
-        return <Rows size={iconSize} />;
+        return <Icon svg={rowsSvg} size={iconSize} />;
       case "indexes":
-        return <Lightning size={iconSize} />;
+        return <Icon svg={lightningSvg} size={iconSize} />;
       case "index":
-        return <Lightning size={iconSize} />;
+        return <Icon svg={lightningSvg} size={iconSize} />;
       case "constraints":
-        return <Lock size={iconSize} />;
+        return <Icon svg={lockSvg} size={iconSize} />;
       case "constraint":
-        return <Lock size={iconSize} />;
+        return <Icon svg={lockSvg} size={iconSize} />;
       default:
         return null;
     }
@@ -334,9 +335,9 @@ export function ObjectTree(props: Props) {
             ) : isLeaf || node.type === "data" ? (
               ""
             ) : node.expanded ? (
-              <CaretDown size={12} />
+              <Icon svg={caretDownSvg} size={12} />
             ) : (
-              <CaretRight size={12} />
+              <Icon svg={caretRightSvg} size={12} />
             )}
           </span>
           <span class="tree-node-icon">{getNodeIcon(node)}</span>
@@ -350,7 +351,7 @@ export function ObjectTree(props: Props) {
                   handleDisconnect(node);
                 }}
               >
-                <X size={14} />
+                <Icon svg={xSvg} size={14} />
               </button>
             </Show>
             <button
@@ -362,7 +363,7 @@ export function ObjectTree(props: Props) {
                 props.onDelete(config.id, e);
               }}
             >
-              <Trash size={14} />
+              <Icon svg={trashSvg} size={14} />
             </button>
           </Show>
         </div>

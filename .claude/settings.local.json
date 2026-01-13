@@ -7,7 +7,8 @@
       "Bash(git commit:*)",
       "Bash(just icons)",
       "Bash(cargo build:*)",
-      "Bash(pnpm tauri:*)"
+      "Bash(pnpm tauri:*)",
+      "Bash(pnpm remove:*)"
     ]
   }
 }

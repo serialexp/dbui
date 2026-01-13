@@ -20,6 +20,9 @@ importers:
       '@codemirror/view':
         specifier: ^6.39.9
         version: 6.39.9
+      '@phosphor-icons/core':
+        specifier: ^2.1.1
+        version: 2.1.1
       '@tauri-apps/api':
         specifier: ^2
         version: 2.9.1
@@ -32,9 +35,6 @@ importers:
       codemirror:
         specifier: ^6.0.2
         version: 6.0.2
-      phosphor-solid:
-        specifier: ^1.1.5
-        version: 1.1.5(react@19.2.3)
       solid-js:
         specifier: ^1.9.3
         version: 1.9.10
@@ -345,6 +345,9 @@ packages:
 
   '@marijn/find-cluster-break@1.0.2':
     resolution: {integrity: sha512-l0h88YhZFyKdXIFNfSWpyjStDjGHwZ/U7iobcK1cQQD8sejsONdQtTVU+1wVN1PBw40PiiHB1vA5S7VTfQiP9g==}
+
+  '@phosphor-icons/core@2.1.1':
+    resolution: {integrity: sha512-v4ARvrip4qBCImOE5rmPUylOEK4iiED9ZyKjcvzuezqMaiRASCHKcRIuvvxL/twvLpkfnEODCOJp5dM4eZilxQ==}
 
   '@rollup/rollup-android-arm-eabi@4.55.1':
     resolution: {integrity: sha512-9R0DM/ykwfGIlNu6+2U09ga0WXeZ9MRC2Ter8jnz8415VbuIykVuc6bhdrbORFZANDmTDvq26mJrEVTl8TdnDg==}
@@ -688,12 +691,6 @@ packages:
   parse5@7.3.0:
     resolution: {integrity: sha512-IInvU7fabl34qmi9gY8XOVxhYyMyuH2xUNpb2q8/Y+7552KlejkRvqvD19nMoUW/uQGGbqNpA6Tufu5FL5BZgw==}
 
-  phosphor-solid@1.1.5:
-    resolution: {integrity: sha512-FNvvkJytLTYrsvzafgkv/jUhsWOuiXAUcJevX/BD+bs0vATVoO1JCpEToFkVnYY8gkIWrT8Mojwzqb1mFTFQgw==}
-    engines: {node: '>=10'}
-    peerDependencies:
-      react: '>=16'
-
   picocolors@1.1.1:
     resolution: {integrity: sha512-xceH2snhtb5M9liqDsmEw56le376mTZkEX/jEb/RxNFyegNul7eNslCXP9FDj/Lcu0X8KEyMceP2ntpaHrDEVA==}
 
@@ -704,10 +701,6 @@ packages:
   postcss@8.5.6:
     resolution: {integrity: sha512-3Ybi1tAuwAP9s0r1UQ2J4n5Y0G05bJkpUIO0/bI9MhwmD70S5aTWbXGBwxHrelT+XM1k6dM0pk+SwNkpTRN7Pg==}
     engines: {node: ^10 || ^12 || >=14}
-
-  react@19.2.3:
-    resolution: {integrity: sha512-Ku/hhYbVjOQnXDZFv2+RibmLFGwFdeeKHFcOTlrt7xplBnya5OGn/hIRDsqDiSUcfORsDC7MPxwork8jBwsIWA==}
-    engines: {node: '>=0.10.0'}
 
   rollup@4.55.1:
     resolution: {integrity: sha512-wDv/Ht1BNHB4upNbK74s9usvl7hObDnvVzknxqY/E/O3X6rW1U1rV1aENEfJ54eFZDTNo7zv1f5N4edCluH7+A==}
@@ -1106,6 +1099,8 @@ snapshots:
 
   '@marijn/find-cluster-break@1.0.2': {}
 
+  '@phosphor-icons/core@2.1.1': {}
+
   '@rollup/rollup-android-arm-eabi@4.55.1':
     optional: true
 
@@ -1381,11 +1376,6 @@ snapshots:
     dependencies:
       entities: 6.0.1
 
-  phosphor-solid@1.1.5(react@19.2.3):
-    dependencies:
-      react: 19.2.3
-      solid-js: 1.9.10
-
   picocolors@1.1.1: {}
 
   picomatch@4.0.3: {}
@@ -1395,8 +1385,6 @@ snapshots:
       nanoid: 3.3.11
       picocolors: 1.1.1
       source-map-js: 1.2.1
-
-  react@19.2.3: {}
 
   rollup@4.55.1:
     dependencies:
