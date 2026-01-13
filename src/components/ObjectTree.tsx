@@ -8,7 +8,7 @@ import {
   X,
   Trash,
   Database,
-  Cylinder,
+  Stack,
   Folder,
   FolderOpen,
   Table,
@@ -284,7 +284,7 @@ export function ObjectTree(props: Props) {
       case "connection":
         return <Database size={iconSize} />;
       case "database":
-        return <Cylinder size={iconSize} />;
+        return <Stack size={iconSize} />;
       case "schema":
         return node.expanded ? <FolderOpen size={iconSize} /> : <Folder size={iconSize} />;
       case "tables":
