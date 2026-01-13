@@ -1,6 +1,8 @@
-// Prevents additional console window on Windows in release, DO NOT REMOVE!!
+// ABOUTME: Entry point for the DBUI Tauri application.
+// ABOUTME: Initializes the Rust backend and starts the app.
+
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 fn main() {
-    tauri_app_lib::run()
+    dbui_lib::run()
 }
