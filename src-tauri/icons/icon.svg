@@ -49,27 +49,27 @@
 
   <!-- Database cylinder -->
   <!-- Top ellipse -->
-  <ellipse cx="256" cy="156" rx="103" ry="34" fill="#e0f2fe" opacity="0.95"/>
+  <ellipse cx="256" cy="136" rx="103" ry="34" fill="#e0f2fe" opacity="0.95"/>
 
   <!-- Body -->
-  <path d="M153 156 L153 311 Q153 345 256 345 Q359 345 359 311 L359 156 Q359 190 256 190 Q153 190 153 156"
+  <path d="M153 136 L153 291 Q153 325 256 325 Q359 325 359 291 L359 136 Q359 170 256 170 Q153 170 153 136"
         fill="url(#grad2)" opacity="0.9"/>
 
   <!-- Middle stripe 1 -->
-  <path d="M153 208 Q153 242 256 242 Q359 242 359 208"
+  <path d="M153 188 Q153 222 256 222 Q359 222 359 188"
         stroke="#e0f2fe" stroke-width="2.5" fill="none" opacity="0.6"/>
 
   <!-- Middle stripe 2 -->
-  <path d="M153 260 Q153 294 256 294 Q359 294 359 260"
+  <path d="M153 240 Q153 274 256 274 Q359 274 359 240"
         stroke="#e0f2fe" stroke-width="2.5" fill="none" opacity="0.6"/>
 
   <!-- Bottom curve -->
-  <path d="M153 311 Q153 345 256 345 Q359 345 359 311"
+  <path d="M153 291 Q153 325 256 325 Q359 325 359 291"
         stroke="#1e40af" stroke-width="2.5" fill="none" opacity="0.5"/>
 
   <!-- Highlight on top -->
-  <ellipse cx="256" cy="156" rx="86" ry="26" fill="#ffffff" opacity="0.3"/>
+  <ellipse cx="256" cy="136" rx="86" ry="26" fill="#ffffff" opacity="0.3"/>
 
   <!-- DB text -->
-  <text x="256" y="420" text-anchor="middle" font-family="system-ui, -apple-system, sans-serif" font-size="72" font-weight="700" fill="#ffffff">DB</text>
+  <text x="256" y="400" text-anchor="middle" font-family="system-ui, -apple-system, sans-serif" font-size="72" font-weight="700" fill="#ffffff">DB</text>
 </svg>
