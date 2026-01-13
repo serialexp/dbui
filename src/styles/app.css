@@ -156,6 +156,12 @@ body {
   font-size: 14px;
   line-height: 1;
   border-radius: 2px;
+  opacity: 0;
+  transition: opacity 0.15s ease;
+}
+
+.tree-node-content:hover .disconnect-btn {
+  opacity: 1;
 }
 
 .disconnect-btn:hover {
