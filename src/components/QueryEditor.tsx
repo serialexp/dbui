@@ -147,6 +147,13 @@ export function QueryEditor(props: Props) {
                 return true;
               },
             },
+            {
+              key: "Ctrl-Enter",
+              run: () => {
+                handleExecute();
+                return true;
+              },
+            },
           ])
         ),
         queryHighlightField,
