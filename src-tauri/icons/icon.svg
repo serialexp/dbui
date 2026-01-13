@@ -36,14 +36,16 @@
            L140 50
            A90 90 0 0 0 50 140
            L50 350"
-        stroke="url(#specular)" stroke-width="4" fill="none" stroke-linecap="round"/>
+        stroke="url(#specular)" stroke-width="4" fill="none" stroke-linecap="round"
+        clip-path="url(#iconClip)"/>
 
   <!-- Specular highlight - follows bottom and right border -->
   <path d="M162 462
            L372 462
            A90 90 0 0 0 462 372
            L462 162"
-        stroke="url(#specular2)" stroke-width="4" fill="none" stroke-linecap="round"/>
+        stroke="url(#specular2)" stroke-width="4" fill="none" stroke-linecap="round"
+        clip-path="url(#iconClip)"/>
 
   <!-- Database cylinder -->
   <!-- Top ellipse -->
