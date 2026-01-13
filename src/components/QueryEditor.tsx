@@ -2,8 +2,8 @@
 // ABOUTME: Provides syntax highlighting and query execution.
 
 import { onMount, onCleanup, createEffect } from "solid-js";
-import { EditorState } from "@codemirror/state";
-import { EditorView, keymap } from "@codemirror/view";
+import { EditorState, StateEffect, StateField } from "@codemirror/state";
+import { EditorView, keymap, Decoration, DecorationSet } from "@codemirror/view";
 import { basicSetup } from "codemirror";
 import { sql, PostgreSQL, MySQL, SQLite } from "@codemirror/lang-sql";
 import { oneDark } from "@codemirror/theme-one-dark";
@@ -21,12 +21,10 @@ export function QueryEditor(props: Props) {
   let containerRef: HTMLDivElement | undefined;
   let view: EditorView | undefined;
 
-  const getQueryAtCursor = (): string => {
-    if (!view) return props.value;
-
-    const doc = view.state.doc.toString();
-    const cursorPos = view.state.selection.main.head;
-
+  const getQueryRangeAtCursor = (
+    doc: string,
+    cursorPos: number
+  ): { query: string; start: number; end: number } | null => {
     // Split queries by semicolon
     const queries: { query: string; start: number; end: number }[] = [];
     let currentQuery = "";
@@ -59,12 +57,63 @@ export function QueryEditor(props: Props) {
     // Find which query contains the cursor
     for (const q of queries) {
       if (cursorPos >= q.start && cursorPos <= q.end) {
-        return q.query;
+        return q;
       }
     }
 
-    // If no query found (empty document), return full text
-    return doc.trim() || props.value;
+    return null;
+  };
+
+  const getQueryAtCursor = (): string => {
+    if (!view) return props.value;
+
+    const doc = view.state.doc.toString();
+    const cursorPos = view.state.selection.main.head;
+    const range = getQueryRangeAtCursor(doc, cursorPos);
+
+    return range?.query || doc.trim() || props.value;
+  };
+
+  // State effect and field for query highlighting
+  const setQueryHighlight = StateEffect.define<{ from: number; to: number } | null>();
+
+  const queryHighlightField = StateField.define<DecorationSet>({
+    create() {
+      return Decoration.none;
+    },
+    update(highlights, tr) {
+      highlights = highlights.map(tr.changes);
+      for (let effect of tr.effects) {
+        if (effect.is(setQueryHighlight)) {
+          if (effect.value === null) {
+            highlights = Decoration.none;
+          } else {
+            const mark = Decoration.mark({
+              class: "cm-query-highlight",
+            });
+            highlights = Decoration.set([mark.range(effect.value.from, effect.value.to)]);
+          }
+        }
+      }
+      return highlights;
+    },
+    provide: (f) => EditorView.decorations.from(f),
+  });
+
+  const updateQueryHighlight = (view: EditorView) => {
+    const doc = view.state.doc.toString();
+    const cursorPos = view.state.selection.main.head;
+    const range = getQueryRangeAtCursor(doc, cursorPos);
+
+    if (range) {
+      view.dispatch({
+        effects: setQueryHighlight.of({ from: range.start, to: range.end }),
+      });
+    } else {
+      view.dispatch({
+        effects: setQueryHighlight.of(null),
+      });
+    }
   };
 
   const handleExecute = () => {
@@ -97,9 +146,14 @@ export function QueryEditor(props: Props) {
             },
           },
         ]),
+        queryHighlightField,
         EditorView.updateListener.of((update) => {
           if (update.docChanged) {
             props.onChange(update.state.doc.toString());
+          }
+          // Update highlight when cursor moves or document changes
+          if (update.selectionSet || update.docChanged) {
+            updateQueryHighlight(update.view);
           }
         }),
         EditorView.theme({
@@ -110,6 +164,10 @@ export function QueryEditor(props: Props) {
           ".cm-scroller": {
             overflow: "auto",
           },
+          ".cm-query-highlight": {
+            backgroundColor: "rgba(120, 160, 200, 0.15)",
+            borderLeft: "2px solid rgba(120, 160, 200, 0.5)",
+          },
         }),
       ],
     });
@@ -118,6 +176,9 @@ export function QueryEditor(props: Props) {
       state,
       parent: containerRef,
     });
+
+    // Initial highlight
+    updateQueryHighlight(view);
   });
 
   onCleanup(() => {
