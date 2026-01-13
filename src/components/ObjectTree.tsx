@@ -2,7 +2,23 @@
 // ABOUTME: Shows connections, databases, schemas, tables, and their metadata.
 
 import { createSignal, createEffect, For, Show } from "solid-js";
-import { CaretRight, CaretDown, X, Trash } from "phosphor-solid";
+import {
+  CaretRight,
+  CaretDown,
+  X,
+  Trash,
+  Database,
+  Cylinder,
+  Folder,
+  FolderOpen,
+  Table,
+  Eye,
+  ListBullets,
+  Columns,
+  TextColumns,
+  Lightning,
+  Lock,
+} from "phosphor-solid";
 import type { TreeNode, ConnectionConfig } from "../lib/types";
 import {
   connect,
@@ -262,6 +278,42 @@ export function ObjectTree(props: Props) {
     }
   };
 
+  const getNodeIcon = (node: TreeNode) => {
+    const iconSize = 14;
+    switch (node.type) {
+      case "connection":
+        return <Database size={iconSize} />;
+      case "database":
+        return <Cylinder size={iconSize} />;
+      case "schema":
+        return node.expanded ? <FolderOpen size={iconSize} /> : <Folder size={iconSize} />;
+      case "tables":
+        return node.expanded ? <FolderOpen size={iconSize} /> : <Folder size={iconSize} />;
+      case "table":
+        return <Table size={iconSize} />;
+      case "views":
+        return node.expanded ? <FolderOpen size={iconSize} /> : <Folder size={iconSize} />;
+      case "view":
+        return <Eye size={iconSize} />;
+      case "data":
+        return <ListBullets size={iconSize} />;
+      case "columns":
+        return <Columns size={iconSize} />;
+      case "column":
+        return <TextColumns size={iconSize} />;
+      case "indexes":
+        return <Lightning size={iconSize} />;
+      case "index":
+        return <Lightning size={iconSize} />;
+      case "constraints":
+        return <Lock size={iconSize} />;
+      case "constraint":
+        return <Lock size={iconSize} />;
+      default:
+        return null;
+    }
+  };
+
   const renderNode = (node: TreeNode, depth: number = 0) => {
     const hasChildren =
       node.children && node.children.length > 0 ||
@@ -287,6 +339,7 @@ export function ObjectTree(props: Props) {
               <CaretRight size={12} />
             )}
           </span>
+          <span class="tree-node-icon">{getNodeIcon(node)}</span>
           <span class="tree-label">{node.label}</span>
           <Show when={node.type === "connection"}>
             <Show when={node.expanded}>
