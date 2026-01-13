@@ -1,7 +1,7 @@
 // ABOUTME: Modal form for creating and editing database connections.
 // ABOUTME: Supports PostgreSQL, MySQL, and SQLite connection configuration.
 
-import { createSignal, Show } from "solid-js";
+import { createSignal, createEffect, Show } from "solid-js";
 import type { DatabaseType, SaveConnectionInput } from "../lib/types";
 import { saveConnection } from "../lib/tauri";
 
@@ -19,8 +19,100 @@ export function ConnectionForm(props: Props) {
   const [password, setPassword] = createSignal("");
   const [database, setDatabase] = createSignal("");
   const [filePath, setFilePath] = createSignal("");
+  const [connectionUrl, setConnectionUrl] = createSignal("");
   const [error, setError] = createSignal<string | null>(null);
   const [saving, setSaving] = createSignal(false);
+  const [updatingFromUrl, setUpdatingFromUrl] = createSignal(false);
+  const [updatingFromFields, setUpdatingFromFields] = createSignal(false);
+
+  const parseConnectionUrl = (url: string) => {
+    if (!url.trim()) return;
+
+    setUpdatingFromUrl(true);
+    try {
+      // SQLite: sqlite:/path or just /path or file.db
+      if (url.startsWith("sqlite:")) {
+        setDbType("sqlite");
+        setFilePath(url.replace("sqlite:", ""));
+        return;
+      }
+
+      // Try to parse as URL
+      const match = url.match(
+        /^(postgres|postgresql|mysql):\/\/(?:([^:@]+)(?::([^@]*))?@)?([^:\/]+)(?::(\d+))?(?:\/(.*))?$/
+      );
+
+      if (match) {
+        const [, protocol, user, pass, h, p, db] = match;
+        const type = protocol === "mysql" ? "mysql" : "postgres";
+        setDbType(type);
+        setUsername(user || "");
+        setPassword(pass || "");
+        setHost(h || "localhost");
+        setPort(p ? parseInt(p) : type === "mysql" ? 3306 : 5432);
+        setDatabase(db || "");
+      }
+    } finally {
+      setUpdatingFromUrl(false);
+    }
+  };
+
+  const buildConnectionUrl = (): string => {
+    const type = dbType();
+
+    if (type === "sqlite") {
+      const path = filePath();
+      return path ? `sqlite:${path}` : "";
+    }
+
+    const protocol = type === "mysql" ? "mysql" : "postgres";
+    const user = username();
+    const pass = password();
+    const h = host();
+    const p = port();
+    const db = database();
+
+    let url = `${protocol}://`;
+    if (user) {
+      url += user;
+      if (pass) {
+        url += `:${pass}`;
+      }
+      url += "@";
+    }
+    url += h;
+    if (p && p !== (type === "mysql" ? 3306 : 5432)) {
+      url += `:${p}`;
+    }
+    if (db) {
+      url += `/${db}`;
+    }
+    return url;
+  };
+
+  // Update URL when fields change
+  createEffect(() => {
+    if (updatingFromUrl()) return;
+
+    // Access all reactive values to track them
+    dbType();
+    host();
+    port();
+    username();
+    password();
+    database();
+    filePath();
+
+    setUpdatingFromFields(true);
+    setConnectionUrl(buildConnectionUrl());
+    setUpdatingFromFields(false);
+  });
+
+  const handleUrlChange = (url: string) => {
+    if (updatingFromFields()) return;
+    setConnectionUrl(url);
+    parseConnectionUrl(url);
+  };
 
   const handleDbTypeChange = (type: DatabaseType) => {
     setDbType(type);
@@ -40,7 +132,6 @@ export function ConnectionForm(props: Props) {
       const input: SaveConnectionInput = {
         name: name(),
         db_type: dbType(),
-        // For SQLite, host stores the file path
         host: dbType() === "sqlite" ? filePath() : host(),
         port: dbType() === "sqlite" ? 0 : port(),
         username: dbType() === "sqlite" ? "" : username(),
@@ -73,6 +164,17 @@ export function ConnectionForm(props: Props) {
               onInput={(e) => setName(e.currentTarget.value)}
               placeholder="My Database"
               required
+            />
+          </div>
+
+          <div class="form-group">
+            <label for="connectionUrl">Connection URL</label>
+            <input
+              id="connectionUrl"
+              type="text"
+              value={connectionUrl()}
+              onInput={(e) => handleUrlChange(e.currentTarget.value)}
+              placeholder="postgres://user:pass@localhost:5432/db"
             />
           </div>
 
@@ -156,7 +258,6 @@ export function ConnectionForm(props: Props) {
                   type="text"
                   value={username()}
                   onInput={(e) => setUsername(e.currentTarget.value)}
-                  required
                 />
               </div>
               <div class="form-group flex-1">
@@ -171,7 +272,7 @@ export function ConnectionForm(props: Props) {
             </div>
 
             <div class="form-group">
-              <label for="database">Database (optional)</label>
+              <label for="database">Database</label>
               <input
                 id="database"
                 type="text"
