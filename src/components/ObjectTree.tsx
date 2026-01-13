@@ -98,6 +98,43 @@ export function ObjectTree(props: Props) {
       return;
     }
 
+    // Handle leaf nodes that don't need loading state
+    if (["column", "index", "constraint"].includes(node.type)) {
+      switch (node.type) {
+        case "column": {
+          const { column } = node.metadata as { column: any };
+          const query = `-- Column: ${column.name}
+-- Type: ${column.data_type}
+-- Nullable: ${column.is_nullable ? "YES" : "NO"}
+-- Default: ${column.column_default ?? "NULL"}
+-- Primary Key: ${column.is_primary_key ? "YES" : "NO"}`;
+          props.onQueryGenerate(query);
+          return;
+        }
+        case "index": {
+          const { index } = node.metadata as { index: any };
+          const query = `-- Index: ${index.name}
+-- Columns: ${index.columns.join(", ")}
+-- Unique: ${index.is_unique ? "YES" : "NO"}
+-- Primary: ${index.is_primary ? "YES" : "NO"}`;
+          props.onQueryGenerate(query);
+          return;
+        }
+        case "constraint": {
+          const { constraint } = node.metadata as { constraint: any };
+          let query = `-- Constraint: ${constraint.name}
+-- Type: ${constraint.constraint_type}
+-- Columns: ${constraint.columns.join(", ")}`;
+          if (constraint.foreign_table) {
+            query += `
+-- References: ${constraint.foreign_table} (${constraint.foreign_columns?.join(", ") ?? ""})`;
+          }
+          props.onQueryGenerate(query);
+          return;
+        }
+      }
+    }
+
     updateNode(node.id, { loading: true });
     setError(null);
 
@@ -252,37 +289,6 @@ export function ObjectTree(props: Props) {
           };
           props.onTableSelect(database, schema, table);
           updateNode(node.id, { expanded: true, loading: false });
-          return;
-        }
-        case "column": {
-          const { column } = node.metadata as { column: any };
-          const query = `-- Column: ${column.name}
--- Type: ${column.data_type}
--- Nullable: ${column.is_nullable ? "YES" : "NO"}
--- Default: ${column.column_default ?? "NULL"}
--- Primary Key: ${column.is_primary_key ? "YES" : "NO"}`;
-          props.onQueryGenerate(query);
-          return;
-        }
-        case "index": {
-          const { index } = node.metadata as { index: any };
-          const query = `-- Index: ${index.name}
--- Columns: ${index.columns.join(", ")}
--- Unique: ${index.is_unique ? "YES" : "NO"}
--- Primary: ${index.is_primary ? "YES" : "NO"}`;
-          props.onQueryGenerate(query);
-          return;
-        }
-        case "constraint": {
-          const { constraint } = node.metadata as { constraint: any };
-          let query = `-- Constraint: ${constraint.name}
--- Type: ${constraint.constraint_type}
--- Columns: ${constraint.columns.join(", ")}`;
-          if (constraint.foreign_table) {
-            query += `
--- References: ${constraint.foreign_table} (${constraint.foreign_columns?.join(", ") ?? ""})`;
-          }
-          props.onQueryGenerate(query);
           return;
         }
         case "columns":
