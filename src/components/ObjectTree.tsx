@@ -1,7 +1,7 @@
 // ABOUTME: Expandable tree view for database objects.
 // ABOUTME: Shows connections, databases, schemas, tables, and their metadata.
 
-import { createSignal, For, Show } from "solid-js";
+import { createSignal, createEffect, For, Show } from "solid-js";
 import type { TreeNode, ConnectionConfig } from "../lib/types";
 import {
   connect,
@@ -290,14 +290,13 @@ export function ObjectTree(props: Props) {
   };
 
   // Initialize nodes when connections change
-  const initNodes = () => {
+  createEffect(() => {
     if (nodes().length === 0 && props.connections.length > 0) {
       updateNodes();
     } else if (props.connections.length !== nodes().length) {
       updateNodes();
     }
-  };
-  initNodes();
+  });
 
   return (
     <div class="object-tree">
