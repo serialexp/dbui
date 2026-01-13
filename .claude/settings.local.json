@@ -4,7 +4,8 @@
       "Bash(pnpm add:*)",
       "Bash(cargo check:*)",
       "Bash(git add:*)",
-      "Bash(git commit:*)"
+      "Bash(git commit:*)",
+      "Bash(just icons)"
     ]
   }
 }

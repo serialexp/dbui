@@ -10,10 +10,10 @@
     </linearGradient>
   </defs>
 
-  <!-- Background circle - r=206 gives ~100px border at 1024px -->
-  <circle cx="256" cy="256" r="206" fill="url(#grad1)"/>
+  <!-- Background rounded rect - macOS style ~22% corner radius -->
+  <rect x="50" y="50" width="412" height="412" rx="90" ry="90" fill="url(#grad1)"/>
 
-  <!-- Database cylinder - scaled to fit smaller circle -->
+  <!-- Database cylinder -->
   <!-- Top ellipse -->
   <ellipse cx="256" cy="156" rx="103" ry="34" fill="#e0f2fe" opacity="0.95"/>
 
