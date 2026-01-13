@@ -29,10 +29,9 @@
   <!-- Specular highlight - follows top and left border -->
   <path d="M350 50
            L140 50
-           Q50 50 50 140
+           A90 90 0 0 0 50 140
            L50 350"
-        stroke="url(#specular)" stroke-width="4" fill="none" stroke-linecap="round"
-        clip-path="url(#iconClip)"/>
+        stroke="url(#specular)" stroke-width="4" fill="none" stroke-linecap="round"/>
 
   <!-- Database cylinder -->
   <!-- Top ellipse -->
