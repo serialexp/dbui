@@ -13,9 +13,9 @@ import {
   FolderOpen,
   Table,
   Eye,
-  ListBullets,
+  GridNine,
   Columns,
-  TextColumns,
+  Rows,
   Lightning,
   Lock,
 } from "phosphor-solid";
@@ -296,11 +296,11 @@ export function ObjectTree(props: Props) {
       case "view":
         return <Eye size={iconSize} />;
       case "data":
-        return <ListBullets size={iconSize} />;
+        return <GridNine size={iconSize} />;
       case "columns":
         return <Columns size={iconSize} />;
       case "column":
-        return <TextColumns size={iconSize} />;
+        return <Rows size={iconSize} />;
       case "indexes":
         return <Lightning size={iconSize} />;
       case "index":
