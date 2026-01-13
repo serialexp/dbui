@@ -282,7 +282,6 @@ body {
 
 .table-wrapper {
   min-width: 100%;
-  overflow: auto;
 }
 
 table {
