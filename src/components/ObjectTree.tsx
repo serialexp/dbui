@@ -13,6 +13,7 @@ import trashSvg from "@phosphor-icons/core/assets/regular/trash.svg?raw";
 import plugsSvg from "@phosphor-icons/core/assets/regular/plugs.svg?raw";
 import plugsConnectedSvg from "@phosphor-icons/core/assets/regular/plugs-connected.svg?raw";
 import databaseSvg from "@phosphor-icons/core/assets/regular/database.svg?raw";
+import foldersSvg from "@phosphor-icons/core/assets/regular/folders.svg?raw";
 import folderSvg from "@phosphor-icons/core/assets/regular/folder.svg?raw";
 import folderOpenSvg from "@phosphor-icons/core/assets/regular/folder-open.svg?raw";
 import tableSvg from "@phosphor-icons/core/assets/regular/table.svg?raw";
@@ -288,7 +289,7 @@ export function ObjectTree(props: Props) {
       case "database":
         return <Icon svg={databaseSvg} size={iconSize} />;
       case "schema":
-        return <Icon svg={node.expanded ? folderOpenSvg : folderSvg} size={iconSize} />;
+        return <Icon svg={foldersSvg} size={iconSize} />;
       case "tables":
         return <Icon svg={node.expanded ? folderOpenSvg : folderSvg} size={iconSize} />;
       case "table":
