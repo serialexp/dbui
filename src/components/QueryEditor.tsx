@@ -2,7 +2,7 @@
 // ABOUTME: Provides syntax highlighting and query execution.
 
 import { onMount, onCleanup, createEffect } from "solid-js";
-import { EditorState, StateEffect, StateField } from "@codemirror/state";
+import { EditorState, StateEffect, StateField, Prec } from "@codemirror/state";
 import { EditorView, keymap, Decoration, DecorationSet } from "@codemirror/view";
 import { basicSetup } from "codemirror";
 import { sql, PostgreSQL, MySQL, SQLite } from "@codemirror/lang-sql";
@@ -117,6 +117,7 @@ export function QueryEditor(props: Props) {
   };
 
   const handleExecute = () => {
+    if (props.disabled) return;
     const queryToRun = getQueryAtCursor();
     props.onExecute(queryToRun);
   };
@@ -137,15 +138,17 @@ export function QueryEditor(props: Props) {
         basicSetup,
         sql({ dialect }),
         oneDark,
-        keymap.of([
-          {
-            key: "Mod-Enter",
-            run: () => {
-              handleExecute();
-              return true;
+        Prec.highest(
+          keymap.of([
+            {
+              key: "Mod-Enter",
+              run: () => {
+                handleExecute();
+                return true;
+              },
             },
-          },
-        ]),
+          ])
+        ),
         queryHighlightField,
         EditorView.updateListener.of((update) => {
           if (update.docChanged) {
