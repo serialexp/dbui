@@ -2,6 +2,7 @@
 // ABOUTME: Shows connections, databases, schemas, tables, and their metadata.
 
 import { createSignal, createEffect, For, Show } from "solid-js";
+import { CaretRight, CaretDown, X, Trash } from "phosphor-solid";
 import type { TreeNode, ConnectionConfig } from "../lib/types";
 import {
   connect,
@@ -263,9 +264,9 @@ export function ObjectTree(props: Props) {
             ) : isLeaf ? (
               ""
             ) : node.expanded ? (
-              "▼"
+              <CaretDown size={12} />
             ) : (
-              "▶"
+              <CaretRight size={12} />
             )}
           </span>
           <span class="tree-label">{node.label}</span>
@@ -278,7 +279,7 @@ export function ObjectTree(props: Props) {
                   handleDisconnect(node);
                 }}
               >
-                ×
+                <X size={14} />
               </button>
             </Show>
             <button
@@ -289,7 +290,7 @@ export function ObjectTree(props: Props) {
                 props.onDelete(config.id, e);
               }}
             >
-              🗑
+              <Trash size={14} />
             </button>
           </Show>
         </div>

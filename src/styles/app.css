@@ -78,11 +78,10 @@ body {
   color: white;
   border-radius: 4px;
   cursor: pointer;
-  font-size: 16px;
-  line-height: 1;
   display: flex;
   align-items: center;
   justify-content: center;
+  padding: 0;
 }
 
 .add-btn:hover {
@@ -114,8 +113,9 @@ body {
 
 .tree-icon {
   width: 16px;
-  text-align: center;
-  font-size: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   color: var(--text-secondary);
 }
 
@@ -154,11 +154,13 @@ body {
   background: transparent;
   color: var(--text-secondary);
   cursor: pointer;
-  font-size: 14px;
-  line-height: 1;
   border-radius: 2px;
   opacity: 0;
   transition: opacity 0.15s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
 }
 
 .tree-node-content:hover .disconnect-btn,

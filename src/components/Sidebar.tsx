@@ -2,6 +2,7 @@
 // ABOUTME: Provides connection management and database navigation.
 
 import { createSignal, Show, onMount } from "solid-js";
+import { Plus } from "phosphor-solid";
 import type { ConnectionConfig } from "../lib/types";
 import { listConnections, deleteConnection } from "../lib/tauri";
 import { ConnectionForm } from "./ConnectionForm";
@@ -51,7 +52,7 @@ export function Sidebar(props: Props) {
       <div class="sidebar-header">
         <h2>Connections</h2>
         <button class="add-btn" onClick={() => setShowForm(true)}>
-          +
+          <Plus size={16} weight="bold" />
         </button>
       </div>
 
