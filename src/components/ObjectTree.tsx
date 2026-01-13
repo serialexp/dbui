@@ -10,6 +10,7 @@ import caretRightSvg from "@phosphor-icons/core/assets/regular/caret-right.svg?r
 import caretDownSvg from "@phosphor-icons/core/assets/regular/caret-down.svg?raw";
 import xSvg from "@phosphor-icons/core/assets/regular/x.svg?raw";
 import trashSvg from "@phosphor-icons/core/assets/regular/trash.svg?raw";
+import plugsSvg from "@phosphor-icons/core/assets/regular/plugs.svg?raw";
 import plugsConnectedSvg from "@phosphor-icons/core/assets/regular/plugs-connected.svg?raw";
 import databaseSvg from "@phosphor-icons/core/assets/regular/database.svg?raw";
 import folderSvg from "@phosphor-icons/core/assets/regular/folder.svg?raw";
@@ -283,7 +284,7 @@ export function ObjectTree(props: Props) {
     const iconSize = 14;
     switch (node.type) {
       case "connection":
-        return <Icon svg={plugsConnectedSvg} size={iconSize} />;
+        return <Icon svg={node.expanded ? plugsConnectedSvg : plugsSvg} size={iconSize} />;
       case "database":
         return <Icon svg={databaseSvg} size={iconSize} />;
       case "schema":
