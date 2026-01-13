@@ -120,7 +120,7 @@ pub async fn list_indexes(
         r#"
         SELECT
             i.relname as index_name,
-            array_agg(a.attname ORDER BY array_position(ix.indkey, a.attnum)) as columns,
+            array_agg(a.attname::TEXT ORDER BY array_position(ix.indkey, a.attnum))::TEXT[] as columns,
             ix.indisunique as is_unique,
             ix.indisprimary as is_primary
         FROM pg_class t
@@ -142,10 +142,10 @@ pub async fn list_indexes(
     Ok(rows
         .iter()
         .map(|r| IndexInfo {
-            name: r.get("index_name"),
-            columns: r.get("columns"),
-            is_unique: r.get("is_unique"),
-            is_primary: r.get("is_primary"),
+            name: r.try_get("index_name").unwrap_or_default(),
+            columns: r.try_get("columns").unwrap_or_default(),
+            is_unique: r.try_get("is_unique").unwrap_or_default(),
+            is_primary: r.try_get("is_primary").unwrap_or_default(),
         })
         .collect())
 }
@@ -161,9 +161,9 @@ pub async fn list_constraints(
         SELECT
             tc.constraint_name,
             tc.constraint_type,
-            array_agg(DISTINCT kcu.column_name) as columns,
+            array_agg(DISTINCT kcu.column_name::TEXT)::TEXT[] as columns,
             ccu.table_name as foreign_table,
-            array_agg(DISTINCT ccu.column_name) FILTER (WHERE ccu.column_name IS NOT NULL AND tc.constraint_type = 'FOREIGN KEY') as foreign_columns
+            array_agg(DISTINCT ccu.column_name::TEXT) FILTER (WHERE ccu.column_name IS NOT NULL AND tc.constraint_type = 'FOREIGN KEY')::TEXT[] as foreign_columns
         FROM information_schema.table_constraints tc
         JOIN information_schema.key_column_usage kcu
             ON tc.constraint_name = kcu.constraint_name
@@ -186,11 +186,11 @@ pub async fn list_constraints(
     Ok(rows
         .iter()
         .map(|r| ConstraintInfo {
-            name: r.get("constraint_name"),
-            constraint_type: r.get("constraint_type"),
-            columns: r.get("columns"),
-            foreign_table: r.get("foreign_table"),
-            foreign_columns: r.get("foreign_columns"),
+            name: r.try_get("constraint_name").unwrap_or_default(),
+            constraint_type: r.try_get("constraint_type").unwrap_or_default(),
+            columns: r.try_get("columns").unwrap_or_default(),
+            foreign_table: r.try_get("foreign_table").ok(),
+            foreign_columns: r.try_get("foreign_columns").ok().flatten(),
         })
         .collect())
 }
