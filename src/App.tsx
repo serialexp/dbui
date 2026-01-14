@@ -19,6 +19,7 @@ function App() {
   const [activeDbType, setActiveDbType] = createSignal<DatabaseType | null>(null);
   const [activeDatabase, setActiveDatabase] = createSignal<string | null>(null);
   const [activeSchema, setActiveSchema] = createSignal<string | null>(null);
+  const [activeTable, setActiveTable] = createSignal<string | null>(null);
   const [activeViewType, setActiveViewType] = createSignal<string | null>(null);
   const [query, setQuery] = createSignal("SELECT 1;");
   const [result, setResult] = createSignal<QueryResult | null>(null);
@@ -43,6 +44,7 @@ function App() {
       setActiveConnectionName(null);
       setActiveDatabase(null);
       setActiveSchema(null);
+      setActiveTable(null);
       setActiveViewType(null);
     }
     setResult(null);
@@ -54,12 +56,14 @@ function App() {
   const handleDatabaseSwitch = (database: string, schema: string | null) => {
     setActiveDatabase(database);
     setActiveSchema(schema);
+    setActiveTable(null);
     setActiveViewType(null);
   };
 
   const handleTableSelect = async (database: string, schema: string, table: string) => {
     setActiveDatabase(database);
     setActiveSchema(schema);
+    setActiveTable(table);
     setActiveViewType("data");
     const newQuery = `SELECT * FROM ${schema}.${table} LIMIT 100;`;
     setQuery(newQuery);
@@ -75,6 +79,7 @@ function App() {
     if (view) {
       setActiveDatabase(view.database);
       setActiveSchema(view.schema);
+      setActiveTable(view.table);
       setActiveViewType(view.type);
     }
     setMetadataView(view);
@@ -89,6 +94,7 @@ function App() {
   const handleMetadataClose = () => {
     setMetadataView(null);
     setSelectedMetadataRow(null);
+    setActiveTable(null);
     setActiveViewType(null);
   };
 
@@ -101,6 +107,7 @@ function App() {
     try {
       setActiveDatabase(database);
       setActiveSchema(schema);
+      setActiveTable(functionName);  // Use function name as "table" for breadcrumb
       setActiveViewType("function");
       const info = await getFunctionDefinition(connectionId, database, schema, functionName);
       setFunctionInfo(info);
@@ -113,6 +120,7 @@ function App() {
 
   const handleFunctionClose = () => {
     setFunctionInfo(null);
+    setActiveTable(null);
     setActiveViewType(null);
   };
 
@@ -155,6 +163,7 @@ function App() {
           connectionName={activeConnectionName()}
           database={activeDatabase()}
           schema={activeSchema()}
+          table={activeTable()}
           viewType={activeViewType()}
         />
 

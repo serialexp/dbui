@@ -881,6 +881,10 @@ tr:hover td.selected-cell {
   color: var(--text-secondary);
 }
 
+.path-segment.table {
+  color: var(--text-primary);
+}
+
 .path-segment.view {
   color: var(--text-primary);
   font-weight: 600;
