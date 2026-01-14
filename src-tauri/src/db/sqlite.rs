@@ -1,7 +1,7 @@
 // ABOUTME: SQLite-specific database introspection queries.
 // ABOUTME: Uses PRAGMA statements and sqlite_master for schema information.
 
-use super::{ColumnInfo, ConstraintInfo, IndexInfo};
+use super::{ColumnInfo, ConstraintInfo, FunctionInfo, IndexInfo};
 use sqlx::Row;
 
 pub async fn list_databases(_pool: &sqlx::SqlitePool) -> Result<Vec<String>, String> {
@@ -52,6 +52,16 @@ pub async fn list_functions(
 ) -> Result<Vec<String>, String> {
     // SQLite doesn't have user-defined functions in the schema
     Ok(vec![])
+}
+
+pub async fn get_function_definition(
+    _pool: &sqlx::SqlitePool,
+    _database: &str,
+    _schema: &str,
+    _function_name: &str,
+) -> Result<FunctionInfo, String> {
+    // SQLite doesn't have user-defined functions in the schema
+    Err("SQLite does not support user-defined functions in the schema".to_string())
 }
 
 pub async fn list_columns(

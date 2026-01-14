@@ -2,13 +2,14 @@
 // ABOUTME: Orchestrates sidebar, query editor, and results display.
 
 import { createSignal, Show } from "solid-js";
-import type { DatabaseType, QueryResult, CellSelection, MetadataView } from "./lib/types";
-import { executeQuery, listConnections } from "./lib/tauri";
+import type { DatabaseType, QueryResult, CellSelection, MetadataView, FunctionInfo } from "./lib/types";
+import { executeQuery, listConnections, getFunctionDefinition } from "./lib/tauri";
 import { Sidebar } from "./components/Sidebar";
 import { QueryEditor } from "./components/QueryEditor";
 import { ResultsTable } from "./components/ResultsTable";
 import { CellInspector } from "./components/CellInspector";
 import { MetadataTable } from "./components/MetadataTable";
+import { FunctionViewer } from "./components/FunctionViewer";
 import "./styles/app.css";
 
 function App() {
@@ -21,6 +22,7 @@ function App() {
   const [selectedCell, setSelectedCell] = createSignal<CellSelection | null>(null);
   const [metadataView, setMetadataView] = createSignal<MetadataView>(null);
   const [selectedMetadataRow, setSelectedMetadataRow] = createSignal<number | null>(null);
+  const [functionInfo, setFunctionInfo] = createSignal<FunctionInfo | null>(null);
 
   const handleConnectionChange = async (id: string | null) => {
     setActiveConnectionId(id);
@@ -65,6 +67,26 @@ function App() {
     setSelectedMetadataRow(null);
   };
 
+  const handleFunctionSelect = async (
+    connectionId: string,
+    database: string,
+    schema: string,
+    functionName: string
+  ) => {
+    try {
+      const info = await getFunctionDefinition(connectionId, database, schema, functionName);
+      setFunctionInfo(info);
+      setMetadataView(null);
+      setSelectedCell(null);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    }
+  };
+
+  const handleFunctionClose = () => {
+    setFunctionInfo(null);
+  };
+
   const handleExecute = async (queryToExecute: string) => {
     const connId = activeConnectionId();
     if (!connId) {
@@ -96,9 +118,10 @@ function App() {
         onTableSelect={handleTableSelect}
         onQueryGenerate={handleQueryGenerate}
         onMetadataSelect={handleMetadataSelect}
+        onFunctionSelect={handleFunctionSelect}
       />
       <main class="main-content">
-        <Show when={!metadataView()}>
+        <Show when={!metadataView() && !functionInfo()}>
           <QueryEditor
             value={query()}
             onChange={setQuery}
@@ -118,7 +141,15 @@ function App() {
           />
         </Show>
 
-        <Show when={!metadataView()}>
+        <Show when={functionInfo()}>
+          <FunctionViewer
+            functionInfo={functionInfo()}
+            dbType={activeDbType()}
+            onClose={handleFunctionClose}
+          />
+        </Show>
+
+        <Show when={!metadataView() && !functionInfo()}>
           <div class="results-area">
             <div class="results-table-wrapper">
               <ResultsTable

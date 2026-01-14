@@ -1,7 +1,7 @@
 // ABOUTME: Tauri command handlers for frontend-backend communication.
 // ABOUTME: Exposes database operations and connection management to the UI.
 
-use crate::db::{ColumnInfo, ConnectionManager, ConstraintInfo, IndexInfo, QueryResult};
+use crate::db::{ColumnInfo, ConnectionManager, ConstraintInfo, FunctionInfo, IndexInfo, QueryResult};
 use crate::storage::{self, ConnectionConfig, DatabaseType};
 use std::sync::OnceLock;
 use tauri::Manager;
@@ -129,6 +129,18 @@ pub async fn list_functions(
 ) -> Result<Vec<String>, String> {
     get_manager()
         .list_functions(&connection_id, &database, &schema)
+        .await
+}
+
+#[tauri::command]
+pub async fn get_function_definition(
+    connection_id: String,
+    database: String,
+    schema: String,
+    function_name: String,
+) -> Result<FunctionInfo, String> {
+    get_manager()
+        .get_function_definition(&connection_id, &database, &schema, &function_name)
         .await
 }
 

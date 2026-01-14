@@ -8,6 +8,7 @@ import type {
   ColumnInfo,
   IndexInfo,
   ConstraintInfo,
+  FunctionInfo,
   QueryResult,
 } from "./types";
 
@@ -70,6 +71,15 @@ export async function listFunctions(
   schema: string
 ): Promise<string[]> {
   return invoke("list_functions", { connectionId, database, schema });
+}
+
+export async function getFunctionDefinition(
+  connectionId: string,
+  database: string,
+  schema: string,
+  functionName: string
+): Promise<FunctionInfo> {
+  return invoke("get_function_definition", { connectionId, database, schema, functionName });
 }
 
 export async function listColumns(

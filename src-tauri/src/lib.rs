@@ -24,6 +24,7 @@ pub fn run() {
             list_tables,
             list_views,
             list_functions,
+            get_function_definition,
             list_columns,
             list_indexes,
             list_constraints,

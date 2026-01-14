@@ -41,6 +41,14 @@ pub struct ConstraintInfo {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct FunctionInfo {
+    pub name: String,
+    pub definition: String,
+    pub return_type: Option<String>,
+    pub language: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct QueryResult {
     pub columns: Vec<String>,
     pub rows: Vec<Vec<serde_json::Value>>,
@@ -201,6 +209,27 @@ impl ConnectionManager {
             ConnectionPool::Postgres(p) => postgres::list_functions(p, database, schema).await,
             ConnectionPool::Mysql(p) => mysql::list_functions(p, database, schema).await,
             ConnectionPool::Sqlite(p) => sqlite::list_functions(p, database, schema).await,
+        }
+    }
+
+    pub async fn get_function_definition(
+        &self,
+        connection_id: &str,
+        database: &str,
+        schema: &str,
+        function_name: &str,
+    ) -> Result<FunctionInfo, String> {
+        let pool = self.get_pool(connection_id).await?;
+        match pool.as_ref() {
+            ConnectionPool::Postgres(p) => {
+                postgres::get_function_definition(p, database, schema, function_name).await
+            }
+            ConnectionPool::Mysql(p) => {
+                mysql::get_function_definition(p, database, schema, function_name).await
+            }
+            ConnectionPool::Sqlite(p) => {
+                sqlite::get_function_definition(p, database, schema, function_name).await
+            }
         }
     }
 

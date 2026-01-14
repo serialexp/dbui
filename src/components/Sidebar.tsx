@@ -17,6 +17,7 @@ interface Props {
   onTableSelect: (database: string, schema: string, table: string) => void;
   onQueryGenerate: (query: string) => void;
   onMetadataSelect: (view: MetadataView) => void;
+  onFunctionSelect: (connectionId: string, database: string, schema: string, functionName: string) => void;
 }
 
 export function Sidebar(props: Props) {
@@ -83,6 +84,7 @@ export function Sidebar(props: Props) {
         onQueryGenerate={props.onQueryGenerate}
         onDelete={handleDelete}
         onMetadataSelect={props.onMetadataSelect}
+        onFunctionSelect={props.onFunctionSelect}
       />
 
       <Show when={showForm()}>

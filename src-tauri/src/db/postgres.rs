@@ -1,7 +1,7 @@
 // ABOUTME: PostgreSQL-specific database introspection queries.
 // ABOUTME: Provides schema, table, column, index, and constraint information.
 
-use super::{ColumnInfo, ConstraintInfo, IndexInfo};
+use super::{ColumnInfo, ConstraintInfo, FunctionInfo, IndexInfo};
 use sqlx::Row;
 
 pub async fn list_databases(pool: &sqlx::PgPool) -> Result<Vec<String>, String> {
@@ -84,6 +84,40 @@ pub async fn list_functions(
     .map_err(|e| format!("Failed to list functions: {}", e))?;
 
     Ok(rows.iter().map(|r| r.get("routine_name")).collect())
+}
+
+pub async fn get_function_definition(
+    pool: &sqlx::PgPool,
+    _database: &str,
+    schema: &str,
+    function_name: &str,
+) -> Result<FunctionInfo, String> {
+    let rows = sqlx::query(
+        r#"
+        SELECT
+            p.proname as name,
+            pg_get_functiondef(p.oid) as definition,
+            pg_catalog.format_type(p.prorettype, NULL) as return_type,
+            l.lanname as language
+        FROM pg_proc p
+        JOIN pg_namespace n ON p.pronamespace = n.oid
+        JOIN pg_language l ON p.prolang = l.oid
+        WHERE n.nspname = $1 AND p.proname = $2
+        LIMIT 1
+        "#,
+    )
+    .bind(schema)
+    .bind(function_name)
+    .fetch_one(pool)
+    .await
+    .map_err(|e| format!("Failed to get function definition: {}", e))?;
+
+    Ok(FunctionInfo {
+        name: rows.get("name"),
+        definition: rows.get("definition"),
+        return_type: rows.get("return_type"),
+        language: rows.get("language"),
+    })
 }
 
 pub async fn list_columns(

@@ -44,6 +44,7 @@ interface Props {
   onQueryGenerate: (query: string) => void;
   onDelete: (id: string, e: Event) => void;
   onMetadataSelect: (view: MetadataView) => void;
+  onFunctionSelect: (connectionId: string, database: string, schema: string, functionName: string) => void;
 }
 
 export function ObjectTree(props: Props) {
@@ -356,19 +357,35 @@ export function ObjectTree(props: Props) {
     }
   };
 
+  const handleFunctionClick = (node: TreeNode) => {
+    const { connectionId, database, schema, function: functionName } = node.metadata as {
+      connectionId: string;
+      database: string;
+      schema: string;
+      function: string;
+    };
+    props.onFunctionSelect(connectionId, database, schema, functionName);
+  };
+
   const renderNode = (node: TreeNode, depth: number = 0) => {
     const hasChildren =
       node.children && node.children.length > 0 ||
       ["connection", "database", "schema", "tables", "views", "functions", "table"].includes(node.type);
     const isLeaf = ["view", "function", "data", "columns", "indexes", "constraints", "empty"].includes(node.type);
-    const isClickable = !isLeaf || ["data", "columns", "indexes", "constraints"].includes(node.type);
+    const isClickable = !isLeaf || ["data", "columns", "indexes", "constraints", "function"].includes(node.type);
 
     return (
       <div class="tree-node">
         <div
           class={`tree-node-content ${node.type}`}
           style={{ "padding-left": `${depth * 16 + 8}px` }}
-          onClick={() => isClickable && handleToggle(node)}
+          onClick={() => {
+            if (node.type === "function") {
+              handleFunctionClick(node);
+            } else if (isClickable) {
+              handleToggle(node);
+            }
+          }}
         >
           <span class="tree-icon">
             {node.loading ? (

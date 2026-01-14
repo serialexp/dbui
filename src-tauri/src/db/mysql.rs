@@ -1,7 +1,7 @@
 // ABOUTME: MySQL-specific database introspection queries.
 // ABOUTME: Provides schema, table, column, index, and constraint information.
 
-use super::{ColumnInfo, ConstraintInfo, IndexInfo};
+use super::{ColumnInfo, ConstraintInfo, FunctionInfo, IndexInfo};
 use sqlx::Row;
 
 pub async fn list_databases(pool: &sqlx::MySqlPool) -> Result<Vec<String>, String> {
@@ -80,6 +80,42 @@ pub async fn list_functions(
     .map_err(|e| format!("Failed to list functions: {}", e))?;
 
     Ok(rows.iter().map(|r| r.get("routine_name")).collect())
+}
+
+pub async fn get_function_definition(
+    pool: &sqlx::MySqlPool,
+    database: &str,
+    _schema: &str,
+    function_name: &str,
+) -> Result<FunctionInfo, String> {
+    // First, get the function info from information_schema
+    let info_row = sqlx::query(
+        "SELECT routine_name, data_type, external_language
+         FROM information_schema.routines
+         WHERE routine_schema = ? AND routine_name = ? AND routine_type = 'FUNCTION'
+         LIMIT 1",
+    )
+    .bind(database)
+    .bind(function_name)
+    .fetch_one(pool)
+    .await
+    .map_err(|e| format!("Failed to get function info: {}", e))?;
+
+    // Get the CREATE FUNCTION statement
+    let query = format!("SHOW CREATE FUNCTION `{}`.`{}`", database, function_name);
+    let create_row = sqlx::query(&query)
+        .fetch_one(pool)
+        .await
+        .map_err(|e| format!("Failed to get function definition: {}", e))?;
+
+    let definition: String = create_row.try_get(2).unwrap_or_default();
+
+    Ok(FunctionInfo {
+        name: info_row.get("routine_name"),
+        definition,
+        return_type: info_row.get("data_type"),
+        language: info_row.get("external_language"),
+    })
 }
 
 pub async fn list_columns(

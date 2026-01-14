@@ -47,6 +47,13 @@ export interface ConstraintInfo {
   foreign_columns: string[] | null;
 }
 
+export interface FunctionInfo {
+  name: string;
+  definition: string;
+  return_type: string | null;
+  language: string | null;
+}
+
 export interface QueryResult {
   columns: string[];
   rows: unknown[][];

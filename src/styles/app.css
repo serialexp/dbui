@@ -786,3 +786,64 @@ tr:hover td.selected-cell {
   border-radius: 4px;
   color: var(--text-primary);
 }
+
+/* Function Viewer */
+.function-viewer {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  background: var(--bg-primary);
+}
+
+.function-viewer-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 16px;
+  background: var(--bg-secondary);
+  border-bottom: 1px solid var(--border-color);
+}
+
+.function-viewer-title {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.function-viewer-title h3 {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.function-return-type {
+  font-size: 12px;
+  color: var(--text-secondary);
+  font-family: var(--font-mono);
+}
+
+.function-language {
+  font-size: 11px;
+  color: var(--text-secondary);
+  background: var(--bg-hover);
+  padding: 2px 6px;
+  border-radius: 3px;
+  text-transform: uppercase;
+}
+
+.function-viewer-content {
+  flex: 1;
+  overflow: auto;
+}
+
+.function-definition-editor {
+  height: 100%;
+}
+
+.function-definition-editor .cm-editor {
+  height: 100%;
+}
+
+.function-definition-editor .cm-scroller {
+  overflow: auto;
+}
