@@ -25,16 +25,80 @@ export function QueryEditor(props: Props) {
     doc: string,
     cursorPos: number
   ): { query: string; start: number; end: number } | null => {
-    // Split queries by semicolon
+    // Split queries by semicolon, respecting string literals and dollar quotes
     const queries: { query: string; start: number; end: number }[] = [];
     let currentQuery = "";
     let queryStart = 0;
+    let inSingleQuote = false;
+    let inDollarQuote = false;
+    let dollarQuoteTag = "";
 
     for (let i = 0; i < doc.length; i++) {
       const char = doc[i];
+      const nextChar = doc[i + 1];
       currentQuery += char;
 
-      if (char === ";") {
+      // Handle dollar quotes (PostgreSQL)
+      if (char === "$" && !inSingleQuote) {
+        if (!inDollarQuote) {
+          // Start of potential dollar quote - capture the tag
+          let tag = "$";
+          let j = i + 1;
+          while (j < doc.length && /[a-zA-Z0-9_]/.test(doc[j])) {
+            tag += doc[j];
+            j++;
+          }
+          if (j < doc.length && doc[j] === "$") {
+            tag += "$";
+            dollarQuoteTag = tag;
+            inDollarQuote = true;
+            // Skip the tag chars we just read
+            for (let k = i + 1; k < j + 1; k++) {
+              currentQuery += doc[k];
+            }
+            i = j;
+            continue;
+          }
+        } else {
+          // Check if this ends the dollar quote
+          let potentialEnd = "$";
+          let j = i + 1;
+          while (j < doc.length && potentialEnd.length < dollarQuoteTag.length) {
+            potentialEnd += doc[j];
+            if (potentialEnd === dollarQuoteTag) {
+              inDollarQuote = false;
+              dollarQuoteTag = "";
+              // Skip the tag chars we just read
+              for (let k = i + 1; k < j + 1; k++) {
+                currentQuery += doc[k];
+              }
+              i = j;
+              break;
+            }
+            j++;
+          }
+          continue;
+        }
+      }
+
+      // Handle single quotes
+      if (char === "'" && !inDollarQuote) {
+        if (inSingleQuote) {
+          // Check for escaped quote ''
+          if (nextChar === "'") {
+            currentQuery += nextChar;
+            i++; // Skip the escaped quote
+          } else {
+            inSingleQuote = false;
+          }
+        } else {
+          inSingleQuote = true;
+        }
+        continue;
+      }
+
+      // Only split on semicolon if not inside any string
+      if (char === ";" && !inSingleQuote && !inDollarQuote) {
         queries.push({
           query: currentQuery.trim(),
           start: queryStart,
