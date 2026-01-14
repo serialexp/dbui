@@ -58,6 +58,7 @@ export interface QueryResult {
   columns: string[];
   rows: unknown[][];
   row_count: number;
+  message: string | null;
 }
 
 export interface TreeNode {

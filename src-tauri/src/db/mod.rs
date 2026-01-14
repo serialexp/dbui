@@ -53,6 +53,7 @@ pub struct QueryResult {
     pub columns: Vec<String>,
     pub rows: Vec<Vec<serde_json::Value>>,
     pub row_count: usize,
+    pub message: Option<String>,
 }
 
 pub enum ConnectionPool {
@@ -301,10 +302,25 @@ async fn execute_query_pg(pool: &sqlx::PgPool, query: &str) -> Result<QueryResul
         .map_err(|e| format!("Query failed: {}", e))?;
 
     if rows.is_empty() {
+        // Query succeeded but returned no rows (e.g., DDL or DML with no RETURNING)
+        // Try to execute to get rows affected
+        let result = sqlx::query(query)
+            .execute(pool)
+            .await
+            .map_err(|e| format!("Query failed: {}", e))?;
+
+        let rows_affected = result.rows_affected();
+        let message = if rows_affected > 0 {
+            Some(format!("Query executed successfully. {} row(s) affected.", rows_affected))
+        } else {
+            Some("Query executed successfully.".to_string())
+        };
+
         return Ok(QueryResult {
             columns: vec![],
             rows: vec![],
             row_count: 0,
+            message,
         });
     }
 
@@ -328,6 +344,7 @@ async fn execute_query_pg(pool: &sqlx::PgPool, query: &str) -> Result<QueryResul
         columns,
         row_count: result_rows.len(),
         rows: result_rows,
+        message: None,
     })
 }
 
@@ -378,10 +395,23 @@ async fn execute_query_mysql(pool: &sqlx::MySqlPool, query: &str) -> Result<Quer
         .map_err(|e| format!("Query failed: {}", e))?;
 
     if rows.is_empty() {
+        let result = sqlx::query(query)
+            .execute(pool)
+            .await
+            .map_err(|e| format!("Query failed: {}", e))?;
+
+        let rows_affected = result.rows_affected();
+        let message = if rows_affected > 0 {
+            Some(format!("Query executed successfully. {} row(s) affected.", rows_affected))
+        } else {
+            Some("Query executed successfully.".to_string())
+        };
+
         return Ok(QueryResult {
             columns: vec![],
             rows: vec![],
             row_count: 0,
+            message,
         });
     }
 
@@ -405,6 +435,7 @@ async fn execute_query_mysql(pool: &sqlx::MySqlPool, query: &str) -> Result<Quer
         columns,
         row_count: result_rows.len(),
         rows: result_rows,
+        message: None,
     })
 }
 
@@ -450,10 +481,23 @@ async fn execute_query_sqlite(pool: &sqlx::SqlitePool, query: &str) -> Result<Qu
         .map_err(|e| format!("Query failed: {}", e))?;
 
     if rows.is_empty() {
+        let result = sqlx::query(query)
+            .execute(pool)
+            .await
+            .map_err(|e| format!("Query failed: {}", e))?;
+
+        let rows_affected = result.rows_affected();
+        let message = if rows_affected > 0 {
+            Some(format!("Query executed successfully. {} row(s) affected.", rows_affected))
+        } else {
+            Some("Query executed successfully.".to_string())
+        };
+
         return Ok(QueryResult {
             columns: vec![],
             rows: vec![],
             row_count: 0,
+            message,
         });
     }
 
@@ -477,6 +521,7 @@ async fn execute_query_sqlite(pool: &sqlx::SqlitePool, query: &str) -> Result<Qu
         columns,
         row_count: result_rows.len(),
         rows: result_rows,
+        message: None,
     })
 }
 

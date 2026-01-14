@@ -60,7 +60,7 @@ export function ResultsTable(props: Props) {
         <Show when={!props.loading && !props.error && props.result}>
           <Show
             when={props.result!.rows.length > 0}
-            fallback={<div class="empty">No results</div>}
+            fallback={<div class="empty">{props.result!.message || "No results"}</div>}
           >
             <div class="table-wrapper">
               <table>
