@@ -40,6 +40,7 @@ interface Props {
   connections: ConnectionConfig[];
   activeConnectionId: string | null;
   onConnectionChange: (id: string | null) => void;
+  onDatabaseSwitch: (database: string, schema: string | null) => void;
   onTableSelect: (database: string, schema: string, table: string) => void;
   onQueryGenerate: (query: string) => void;
   onDelete: (id: string, e: Event) => void;
@@ -134,6 +135,7 @@ export function ObjectTree(props: Props) {
             database: string;
           };
           await switchDatabase(connectionId, database);
+          props.onDatabaseSwitch(database, null);
           const schemas = await listSchemas(connectionId, database);
           children = schemas.map((schema) => ({
             id: `${node.id}:schema:${schema}`,

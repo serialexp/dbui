@@ -14,6 +14,7 @@ import plusSvg from "@phosphor-icons/core/assets/regular/plus.svg?raw";
 interface Props {
   activeConnectionId: string | null;
   onConnectionChange: (id: string | null) => void;
+  onDatabaseSwitch: (database: string, schema: string | null) => void;
   onTableSelect: (database: string, schema: string, table: string) => void;
   onQueryGenerate: (query: string) => void;
   onMetadataSelect: (view: MetadataView) => void;
@@ -80,6 +81,7 @@ export function Sidebar(props: Props) {
         connections={connections()}
         activeConnectionId={props.activeConnectionId}
         onConnectionChange={props.onConnectionChange}
+        onDatabaseSwitch={props.onDatabaseSwitch}
         onTableSelect={props.onTableSelect}
         onQueryGenerate={props.onQueryGenerate}
         onDelete={handleDelete}

@@ -10,11 +10,15 @@ import { ResultsTable } from "./components/ResultsTable";
 import { CellInspector } from "./components/CellInspector";
 import { MetadataTable } from "./components/MetadataTable";
 import { FunctionViewer } from "./components/FunctionViewer";
+import { ConnectionPath } from "./components/ConnectionPath";
 import "./styles/app.css";
 
 function App() {
   const [activeConnectionId, setActiveConnectionId] = createSignal<string | null>(null);
+  const [activeConnectionName, setActiveConnectionName] = createSignal<string | null>(null);
   const [activeDbType, setActiveDbType] = createSignal<DatabaseType | null>(null);
+  const [activeDatabase, setActiveDatabase] = createSignal<string | null>(null);
+  const [activeSchema, setActiveSchema] = createSignal<string | null>(null);
   const [query, setQuery] = createSignal("SELECT 1;");
   const [result, setResult] = createSignal<QueryResult | null>(null);
   const [error, setError] = createSignal<string | null>(null);
@@ -31,9 +35,13 @@ function App() {
       const conn = connections.find((c) => c.id === id);
       if (conn) {
         setActiveDbType(conn.db_type);
+        setActiveConnectionName(conn.name);
       }
     } else {
       setActiveDbType(null);
+      setActiveConnectionName(null);
+      setActiveDatabase(null);
+      setActiveSchema(null);
     }
     setResult(null);
     setError(null);
@@ -41,7 +49,14 @@ function App() {
     setMetadataView(null);
   };
 
+  const handleDatabaseSwitch = (database: string, schema: string | null) => {
+    setActiveDatabase(database);
+    setActiveSchema(schema);
+  };
+
   const handleTableSelect = async (database: string, schema: string, table: string) => {
+    setActiveDatabase(database);
+    setActiveSchema(schema);
     const newQuery = `SELECT * FROM ${schema}.${table} LIMIT 100;`;
     setQuery(newQuery);
     setMetadataView(null);
@@ -53,6 +68,10 @@ function App() {
   };
 
   const handleMetadataSelect = (view: MetadataView) => {
+    if (view) {
+      setActiveDatabase(view.database);
+      setActiveSchema(view.schema);
+    }
     setMetadataView(view);
     setSelectedMetadataRow(null);
     setSelectedCell(null);
@@ -74,6 +93,8 @@ function App() {
     functionName: string
   ) => {
     try {
+      setActiveDatabase(database);
+      setActiveSchema(schema);
       const info = await getFunctionDefinition(connectionId, database, schema, functionName);
       setFunctionInfo(info);
       setMetadataView(null);
@@ -115,12 +136,19 @@ function App() {
       <Sidebar
         activeConnectionId={activeConnectionId()}
         onConnectionChange={handleConnectionChange}
+        onDatabaseSwitch={handleDatabaseSwitch}
         onTableSelect={handleTableSelect}
         onQueryGenerate={handleQueryGenerate}
         onMetadataSelect={handleMetadataSelect}
         onFunctionSelect={handleFunctionSelect}
       />
       <main class="main-content">
+        <ConnectionPath
+          connectionName={activeConnectionName()}
+          database={activeDatabase()}
+          schema={activeSchema()}
+        />
+
         <Show when={!metadataView() && !functionInfo()}>
           <QueryEditor
             value={query()}

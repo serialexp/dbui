@@ -847,3 +847,36 @@ tr:hover td.selected-cell {
 .function-definition-editor .cm-scroller {
   overflow: auto;
 }
+
+/* Connection Path */
+.connection-path {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 16px;
+  background: var(--bg-secondary);
+  border-bottom: 1px solid var(--border-color);
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+
+.path-segment {
+  font-weight: 500;
+}
+
+.path-segment.connection {
+  color: var(--text-primary);
+}
+
+.path-segment.database {
+  color: var(--text-primary);
+}
+
+.path-segment.schema {
+  color: var(--text-secondary);
+}
+
+.path-separator {
+  color: var(--text-secondary);
+  opacity: 0.5;
+}
