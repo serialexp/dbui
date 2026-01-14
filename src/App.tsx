@@ -19,6 +19,7 @@ function App() {
   const [activeDbType, setActiveDbType] = createSignal<DatabaseType | null>(null);
   const [activeDatabase, setActiveDatabase] = createSignal<string | null>(null);
   const [activeSchema, setActiveSchema] = createSignal<string | null>(null);
+  const [activeViewType, setActiveViewType] = createSignal<string | null>(null);
   const [query, setQuery] = createSignal("SELECT 1;");
   const [result, setResult] = createSignal<QueryResult | null>(null);
   const [error, setError] = createSignal<string | null>(null);
@@ -42,6 +43,7 @@ function App() {
       setActiveConnectionName(null);
       setActiveDatabase(null);
       setActiveSchema(null);
+      setActiveViewType(null);
     }
     setResult(null);
     setError(null);
@@ -52,11 +54,13 @@ function App() {
   const handleDatabaseSwitch = (database: string, schema: string | null) => {
     setActiveDatabase(database);
     setActiveSchema(schema);
+    setActiveViewType(null);
   };
 
   const handleTableSelect = async (database: string, schema: string, table: string) => {
     setActiveDatabase(database);
     setActiveSchema(schema);
+    setActiveViewType("data");
     const newQuery = `SELECT * FROM ${schema}.${table} LIMIT 100;`;
     setQuery(newQuery);
     setMetadataView(null);
@@ -71,6 +75,7 @@ function App() {
     if (view) {
       setActiveDatabase(view.database);
       setActiveSchema(view.schema);
+      setActiveViewType(view.type);
     }
     setMetadataView(view);
     setSelectedMetadataRow(null);
@@ -84,6 +89,7 @@ function App() {
   const handleMetadataClose = () => {
     setMetadataView(null);
     setSelectedMetadataRow(null);
+    setActiveViewType(null);
   };
 
   const handleFunctionSelect = async (
@@ -95,6 +101,7 @@ function App() {
     try {
       setActiveDatabase(database);
       setActiveSchema(schema);
+      setActiveViewType("function");
       const info = await getFunctionDefinition(connectionId, database, schema, functionName);
       setFunctionInfo(info);
       setMetadataView(null);
@@ -106,6 +113,7 @@ function App() {
 
   const handleFunctionClose = () => {
     setFunctionInfo(null);
+    setActiveViewType(null);
   };
 
   const handleExecute = async (queryToExecute: string) => {
@@ -147,6 +155,7 @@ function App() {
           connectionName={activeConnectionName()}
           database={activeDatabase()}
           schema={activeSchema()}
+          viewType={activeViewType()}
         />
 
         <Show when={!metadataView() && !functionInfo()}>

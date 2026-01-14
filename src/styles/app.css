@@ -881,6 +881,11 @@ tr:hover td.selected-cell {
   color: var(--text-secondary);
 }
 
+.path-segment.view {
+  color: var(--text-primary);
+  font-weight: 600;
+}
+
 .path-separator {
   color: var(--text-secondary);
   opacity: 0.5;
