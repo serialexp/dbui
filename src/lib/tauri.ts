@@ -33,6 +33,10 @@ export async function disconnect(connectionId: string): Promise<void> {
   return invoke("disconnect", { connectionId });
 }
 
+export async function switchDatabase(connectionId: string, database: string): Promise<void> {
+  return invoke("switch_database", { connectionId, database });
+}
+
 export async function listDatabases(connectionId: string): Promise<string[]> {
   return invoke("list_databases", { connectionId });
 }

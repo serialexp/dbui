@@ -18,6 +18,7 @@ pub fn run() {
             delete_connection,
             connect,
             disconnect,
+            switch_database,
             list_databases,
             list_schemas,
             list_tables,

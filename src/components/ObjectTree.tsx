@@ -3,7 +3,7 @@
 
 import { createSignal, createEffect, For, Show } from "solid-js";
 import { Icon } from "./Icon";
-import type { TreeNode, ConnectionConfig } from "../lib/types";
+import type { TreeNode, ConnectionConfig, MetadataView } from "../lib/types";
 
 // Import Phosphor icons as raw SVG strings
 import caretRightSvg from "@phosphor-icons/core/assets/regular/caret-right.svg?raw";
@@ -24,6 +24,7 @@ import lockSvg from "@phosphor-icons/core/assets/regular/lock.svg?raw";
 import {
   connect,
   disconnect,
+  switchDatabase,
   listDatabases,
   listSchemas,
   listTables,
@@ -40,6 +41,7 @@ interface Props {
   onTableSelect: (database: string, schema: string, table: string) => void;
   onQueryGenerate: (query: string) => void;
   onDelete: (id: string, e: Event) => void;
+  onMetadataSelect: (view: MetadataView) => void;
 }
 
 export function ObjectTree(props: Props) {
@@ -98,43 +100,6 @@ export function ObjectTree(props: Props) {
       return;
     }
 
-    // Handle leaf nodes that don't need loading state
-    if (["column", "index", "constraint"].includes(node.type)) {
-      switch (node.type) {
-        case "column": {
-          const { column } = node.metadata as { column: any };
-          const query = `-- Column: ${column.name}
--- Type: ${column.data_type}
--- Nullable: ${column.is_nullable ? "YES" : "NO"}
--- Default: ${column.column_default ?? "NULL"}
--- Primary Key: ${column.is_primary_key ? "YES" : "NO"}`;
-          props.onQueryGenerate(query);
-          return;
-        }
-        case "index": {
-          const { index } = node.metadata as { index: any };
-          const query = `-- Index: ${index.name}
--- Columns: ${index.columns.join(", ")}
--- Unique: ${index.is_unique ? "YES" : "NO"}
--- Primary: ${index.is_primary ? "YES" : "NO"}`;
-          props.onQueryGenerate(query);
-          return;
-        }
-        case "constraint": {
-          const { constraint } = node.metadata as { constraint: any };
-          let query = `-- Constraint: ${constraint.name}
--- Type: ${constraint.constraint_type}
--- Columns: ${constraint.columns.join(", ")}`;
-          if (constraint.foreign_table) {
-            query += `
--- References: ${constraint.foreign_table} (${constraint.foreign_columns?.join(", ") ?? ""})`;
-          }
-          props.onQueryGenerate(query);
-          return;
-        }
-      }
-    }
-
     updateNode(node.id, { loading: true });
     setError(null);
 
@@ -162,6 +127,7 @@ export function ObjectTree(props: Props) {
             connectionId: string;
             database: string;
           };
+          await switchDatabase(connectionId, database);
           const schemas = await listSchemas(connectionId, database);
           children = schemas.map((schema) => ({
             id: `${node.id}:schema:${schema}`,
@@ -245,37 +211,37 @@ export function ObjectTree(props: Props) {
               id: `${node.id}:columns`,
               label: "Columns",
               type: "columns" as const,
-              children: columns.map((c) => ({
-                id: `${node.id}:column:${c.name}`,
-                label: `${c.name} (${c.data_type})${c.is_primary_key ? " PK" : ""}`,
-                type: "column" as const,
-                metadata: { column: c },
-              })),
-              expanded: false,
+              metadata: {
+                connectionId,
+                database,
+                schema,
+                table,
+                data: columns,
+              },
             },
             {
               id: `${node.id}:indexes`,
               label: "Indexes",
               type: "indexes" as const,
-              children: indexes.map((i) => ({
-                id: `${node.id}:index:${i.name}`,
-                label: `${i.name}${i.is_primary ? " (PK)" : i.is_unique ? " (UNIQUE)" : ""}`,
-                type: "index" as const,
-                metadata: { index: i },
-              })),
-              expanded: false,
+              metadata: {
+                connectionId,
+                database,
+                schema,
+                table,
+                data: indexes,
+              },
             },
             {
               id: `${node.id}:constraints`,
               label: "Constraints",
               type: "constraints" as const,
-              children: constraints.map((c) => ({
-                id: `${node.id}:constraint:${c.name}`,
-                label: `${c.name} (${c.constraint_type})`,
-                type: "constraint" as const,
-                metadata: { constraint: c },
-              })),
-              expanded: false,
+              metadata: {
+                connectionId,
+                database,
+                schema,
+                table,
+                data: constraints,
+              },
             },
           ];
           break;
@@ -294,7 +260,22 @@ export function ObjectTree(props: Props) {
         case "columns":
         case "indexes":
         case "constraints": {
-          updateNode(node.id, { expanded: true, loading: false });
+          const { connectionId, database, schema, table, data } = node.metadata as {
+            connectionId: string;
+            database: string;
+            schema: string;
+            table: string;
+            data: any[];
+          };
+          props.onMetadataSelect({
+            type: node.type,
+            data,
+            connectionId,
+            database,
+            schema,
+            table,
+          });
+          updateNode(node.id, { loading: false });
           return;
         }
       }
@@ -329,21 +310,17 @@ export function ObjectTree(props: Props) {
       case "tables":
       case "views":
       case "columns":
+        return <Icon svg={rowsSvg} size={iconSize} />;
       case "indexes":
+        return <Icon svg={lightningSvg} size={iconSize} />;
       case "constraints":
-        return <Icon svg={dotOutlineSvg} size={iconSize} />;
+        return <Icon svg={lockSvg} size={iconSize} />;
       case "table":
         return <Icon svg={tableSvg} size={iconSize} />;
       case "view":
         return <Icon svg={eyeSvg} size={iconSize} />;
       case "data":
         return <Icon svg={gridNineSvg} size={iconSize} />;
-      case "column":
-        return <Icon svg={rowsSvg} size={iconSize} />;
-      case "index":
-        return <Icon svg={lightningSvg} size={iconSize} />;
-      case "constraint":
-        return <Icon svg={lockSvg} size={iconSize} />;
       default:
         return null;
     }
@@ -352,9 +329,9 @@ export function ObjectTree(props: Props) {
   const renderNode = (node: TreeNode, depth: number = 0) => {
     const hasChildren =
       node.children && node.children.length > 0 ||
-      ["connection", "database", "schema", "tables", "views", "table", "columns", "indexes", "constraints"].includes(node.type);
-    const isLeaf = ["view"].includes(node.type);
-    const isClickable = ["data", "column", "index", "constraint"].includes(node.type) || !isLeaf;
+      ["connection", "database", "schema", "tables", "views", "table"].includes(node.type);
+    const isLeaf = ["view", "data", "columns", "indexes", "constraints"].includes(node.type);
+    const isClickable = !isLeaf || ["data", "columns", "indexes", "constraints"].includes(node.type);
 
     return (
       <div class="tree-node">
@@ -366,7 +343,7 @@ export function ObjectTree(props: Props) {
           <span class="tree-icon">
             {node.loading ? (
               "..."
-            ) : isLeaf || ["data", "column", "index", "constraint"].includes(node.type) ? (
+            ) : isLeaf ? (
               ""
             ) : node.expanded ? (
               <Icon svg={caretDownSvg} size={12} />

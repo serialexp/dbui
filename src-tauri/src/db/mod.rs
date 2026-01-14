@@ -119,6 +119,19 @@ impl ConnectionManager {
         Ok(())
     }
 
+    pub async fn switch_database(&self, config: &ConnectionConfig, database: &str) -> Result<(), String> {
+        // Disconnect existing connection if any
+        let _ = self.disconnect(&config.id).await;
+
+        // Create new config with the specified database
+        let mut new_config = config.clone();
+        new_config.database = Some(database.to_string());
+
+        // Connect to the new database
+        self.connect(&new_config).await?;
+        Ok(())
+    }
+
     pub async fn get_pool(&self, connection_id: &str) -> Result<Arc<ConnectionPool>, String> {
         let pools = self.pools.read().await;
         pools

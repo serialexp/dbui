@@ -79,6 +79,17 @@ pub async fn disconnect(connection_id: String) -> Result<(), String> {
 }
 
 #[tauri::command]
+pub async fn switch_database(app: tauri::AppHandle, connection_id: String, database: String) -> Result<(), String> {
+    let config_dir = app
+        .path()
+        .app_config_dir()
+        .map_err(|e| format!("Failed to get config directory: {}", e))?;
+    let config = storage::get_connection(&config_dir, &connection_id)
+        .ok_or_else(|| format!("Connection '{}' not found", connection_id))?;
+    get_manager().switch_database(&config, &database).await
+}
+
+#[tauri::command]
 pub async fn list_databases(connection_id: String) -> Result<Vec<String>, String> {
     get_manager().list_databases(&connection_id).await
 }
