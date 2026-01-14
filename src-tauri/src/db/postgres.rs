@@ -6,7 +6,12 @@ use sqlx::Row;
 
 pub async fn list_databases(pool: &sqlx::PgPool) -> Result<Vec<String>, String> {
     let rows =
-        sqlx::query("SELECT datname FROM pg_database WHERE datistemplate = false ORDER BY datname")
+        sqlx::query(
+            "SELECT datname FROM pg_database
+             WHERE datistemplate = false
+             AND has_database_privilege(datname, 'CONNECT')
+             ORDER BY datname"
+        )
             .fetch_all(pool)
             .await
             .map_err(|e| format!("Failed to list databases: {}", e))?;
