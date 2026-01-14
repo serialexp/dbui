@@ -70,9 +70,26 @@ export interface TreeNode {
     | "indexes"
     | "index"
     | "constraints"
-    | "constraint";
+    | "constraint"
+    | "empty";
   children?: TreeNode[];
   expanded?: boolean;
   loading?: boolean;
   metadata?: Record<string, unknown>;
 }
+
+export interface CellSelection {
+  rowIndex: number;
+  columnIndex: number;
+  value: unknown;
+  columnName: string;
+}
+
+export type MetadataView = {
+  type: "columns" | "indexes" | "constraints";
+  data: ColumnInfo[] | IndexInfo[] | ConstraintInfo[];
+  connectionId: string;
+  database: string;
+  schema: string;
+  table: string;
+} | null;

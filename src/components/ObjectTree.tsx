@@ -154,14 +154,18 @@ export function ObjectTree(props: Props) {
               id: `${node.id}:tables`,
               label: "Tables",
               type: "tables" as const,
-              children: tables.map((t) => ({
+              children: tables.length > 0 ? tables.map((t) => ({
                 id: `${node.id}:table:${t}`,
                 label: t,
                 type: "table" as const,
                 children: [],
                 expanded: false,
                 metadata: { connectionId, database, schema, table: t },
-              })),
+              })) : [{
+                id: `${node.id}:tables:empty`,
+                label: "No tables",
+                type: "empty" as const,
+              }],
               expanded: false,
               metadata: { connectionId, database, schema },
             },
@@ -330,7 +334,7 @@ export function ObjectTree(props: Props) {
     const hasChildren =
       node.children && node.children.length > 0 ||
       ["connection", "database", "schema", "tables", "views", "table"].includes(node.type);
-    const isLeaf = ["view", "data", "columns", "indexes", "constraints"].includes(node.type);
+    const isLeaf = ["view", "data", "columns", "indexes", "constraints", "empty"].includes(node.type);
     const isClickable = !isLeaf || ["data", "columns", "indexes", "constraints"].includes(node.type);
 
     return (
