@@ -45,6 +45,15 @@ pub async fn list_views(
     Ok(rows.iter().map(|r| r.get("name")).collect())
 }
 
+pub async fn list_functions(
+    _pool: &sqlx::SqlitePool,
+    _database: &str,
+    _schema: &str,
+) -> Result<Vec<String>, String> {
+    // SQLite doesn't have user-defined functions in the schema
+    Ok(vec![])
+}
+
 pub async fn list_columns(
     pool: &sqlx::SqlitePool,
     _database: &str,

@@ -64,6 +64,14 @@ export async function listViews(
   return invoke("list_views", { connectionId, database, schema });
 }
 
+export async function listFunctions(
+  connectionId: string,
+  database: string,
+  schema: string
+): Promise<string[]> {
+  return invoke("list_functions", { connectionId, database, schema });
+}
+
 export async function listColumns(
   connectionId: string,
   database: string,

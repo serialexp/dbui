@@ -190,6 +190,20 @@ impl ConnectionManager {
         }
     }
 
+    pub async fn list_functions(
+        &self,
+        connection_id: &str,
+        database: &str,
+        schema: &str,
+    ) -> Result<Vec<String>, String> {
+        let pool = self.get_pool(connection_id).await?;
+        match pool.as_ref() {
+            ConnectionPool::Postgres(p) => postgres::list_functions(p, database, schema).await,
+            ConnectionPool::Mysql(p) => mysql::list_functions(p, database, schema).await,
+            ConnectionPool::Sqlite(p) => sqlite::list_functions(p, database, schema).await,
+        }
+    }
+
     pub async fn list_columns(
         &self,
         connection_id: &str,

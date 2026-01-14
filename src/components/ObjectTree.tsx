@@ -21,6 +21,7 @@ import gridNineSvg from "@phosphor-icons/core/assets/regular/grid-nine.svg?raw";
 import rowsSvg from "@phosphor-icons/core/assets/regular/rows.svg?raw";
 import lightningSvg from "@phosphor-icons/core/assets/regular/lightning.svg?raw";
 import lockSvg from "@phosphor-icons/core/assets/regular/lock.svg?raw";
+import functionSvg from "@phosphor-icons/core/assets/regular/function.svg?raw";
 import {
   connect,
   disconnect,
@@ -29,6 +30,7 @@ import {
   listSchemas,
   listTables,
   listViews,
+  listFunctions,
   listColumns,
   listIndexes,
   listConstraints,
@@ -95,7 +97,10 @@ export function ObjectTree(props: Props) {
   };
 
   const handleToggle = async (node: TreeNode) => {
-    if (node.expanded) {
+    // Action nodes (data, columns, indexes, constraints) should always execute, not toggle
+    const isActionNode = ["data", "columns", "indexes", "constraints"].includes(node.type);
+
+    if (!isActionNode && node.expanded) {
       updateNode(node.id, { expanded: false });
       return;
     }
@@ -145,9 +150,10 @@ export function ObjectTree(props: Props) {
             database: string;
             schema: string;
           };
-          const [tables, views] = await Promise.all([
+          const [tables, views, functions] = await Promise.all([
             listTables(connectionId, database, schema),
             listViews(connectionId, database, schema),
+            listFunctions(connectionId, database, schema),
           ]);
           children = [
             {
@@ -185,10 +191,26 @@ export function ObjectTree(props: Props) {
               metadata: { connectionId, database, schema },
             });
           }
+          if (functions.length > 0) {
+            children.push({
+              id: `${node.id}:functions`,
+              label: "Functions",
+              type: "functions" as const,
+              children: functions.map((f) => ({
+                id: `${node.id}:function:${f}`,
+                label: f,
+                type: "function" as const,
+                metadata: { connectionId, database, schema, function: f },
+              })),
+              expanded: false,
+              metadata: { connectionId, database, schema },
+            });
+          }
           break;
         }
         case "tables":
-        case "views": {
+        case "views":
+        case "functions": {
           updateNode(node.id, { expanded: true, loading: false });
           return;
         }
@@ -258,7 +280,7 @@ export function ObjectTree(props: Props) {
             table: string;
           };
           props.onTableSelect(database, schema, table);
-          updateNode(node.id, { expanded: true, loading: false });
+          updateNode(node.id, { loading: false });
           return;
         }
         case "columns":
@@ -315,6 +337,8 @@ export function ObjectTree(props: Props) {
       case "views":
       case "columns":
         return <Icon svg={rowsSvg} size={iconSize} />;
+      case "functions":
+        return <Icon svg={rowsSvg} size={iconSize} />;
       case "indexes":
         return <Icon svg={lightningSvg} size={iconSize} />;
       case "constraints":
@@ -323,6 +347,8 @@ export function ObjectTree(props: Props) {
         return <Icon svg={tableSvg} size={iconSize} />;
       case "view":
         return <Icon svg={eyeSvg} size={iconSize} />;
+      case "function":
+        return <Icon svg={functionSvg} size={iconSize} />;
       case "data":
         return <Icon svg={gridNineSvg} size={iconSize} />;
       default:
@@ -333,8 +359,8 @@ export function ObjectTree(props: Props) {
   const renderNode = (node: TreeNode, depth: number = 0) => {
     const hasChildren =
       node.children && node.children.length > 0 ||
-      ["connection", "database", "schema", "tables", "views", "table"].includes(node.type);
-    const isLeaf = ["view", "data", "columns", "indexes", "constraints", "empty"].includes(node.type);
+      ["connection", "database", "schema", "tables", "views", "functions", "table"].includes(node.type);
+    const isLeaf = ["view", "function", "data", "columns", "indexes", "constraints", "empty"].includes(node.type);
     const isClickable = !isLeaf || ["data", "columns", "indexes", "constraints"].includes(node.type);
 
     return (

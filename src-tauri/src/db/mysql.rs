@@ -64,6 +64,24 @@ pub async fn list_views(
     Ok(rows.iter().map(|r| r.get("table_name")).collect())
 }
 
+pub async fn list_functions(
+    pool: &sqlx::MySqlPool,
+    database: &str,
+    _schema: &str,
+) -> Result<Vec<String>, String> {
+    let rows = sqlx::query(
+        "SELECT routine_name FROM information_schema.routines
+         WHERE routine_schema = ? AND routine_type = 'FUNCTION'
+         ORDER BY routine_name",
+    )
+    .bind(database)
+    .fetch_all(pool)
+    .await
+    .map_err(|e| format!("Failed to list functions: {}", e))?;
+
+    Ok(rows.iter().map(|r| r.get("routine_name")).collect())
+}
+
 pub async fn list_columns(
     pool: &sqlx::MySqlPool,
     database: &str,

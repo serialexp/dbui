@@ -4,7 +4,7 @@
 import { createSignal, Show, onMount } from "solid-js";
 import { Icon } from "./Icon";
 import { confirm } from "@tauri-apps/plugin-dialog";
-import type { ConnectionConfig } from "../lib/types";
+import type { ConnectionConfig, MetadataView } from "../lib/types";
 import { listConnections, deleteConnection } from "../lib/tauri";
 import { ConnectionForm } from "./ConnectionForm";
 import { ObjectTree } from "./ObjectTree";
@@ -16,6 +16,7 @@ interface Props {
   onConnectionChange: (id: string | null) => void;
   onTableSelect: (database: string, schema: string, table: string) => void;
   onQueryGenerate: (query: string) => void;
+  onMetadataSelect: (view: MetadataView) => void;
 }
 
 export function Sidebar(props: Props) {
@@ -81,6 +82,7 @@ export function Sidebar(props: Props) {
         onTableSelect={props.onTableSelect}
         onQueryGenerate={props.onQueryGenerate}
         onDelete={handleDelete}
+        onMetadataSelect={props.onMetadataSelect}
       />
 
       <Show when={showForm()}>

@@ -162,6 +162,7 @@ body {
 
 .tree-node-content.tables .tree-label,
 .tree-node-content.views .tree-label,
+.tree-node-content.functions .tree-label,
 .tree-node-content.columns .tree-label,
 .tree-node-content.indexes .tree-label,
 .tree-node-content.constraints .tree-label {

@@ -2,12 +2,14 @@
 // ABOUTME: Shows columns, rows, and row count from executed queries.
 
 import { For, Show } from "solid-js";
-import type { QueryResult } from "../lib/types";
+import type { QueryResult, CellSelection } from "../lib/types";
 
 interface Props {
   result: QueryResult | null;
   error: string | null;
   loading: boolean;
+  selectedCell: CellSelection | null;
+  onCellSelect: (selection: CellSelection | null) => void;
 }
 
 export function ResultsTable(props: Props) {
@@ -71,14 +73,40 @@ export function ResultsTable(props: Props) {
                 </thead>
                 <tbody>
                   <For each={displayRows()}>
-                    {(row) => (
+                    {(row, getRowIndex) => (
                       <tr>
                         <For each={row}>
-                          {(cell) => (
-                            <td class={cell === null ? "null" : ""}>
-                              {formatValue(cell)}
-                            </td>
-                          )}
+                          {(cell, getCellIndex) => {
+                            const rowIdx = getRowIndex();
+                            const cellIdx = getCellIndex();
+
+                            const isSelected = () =>
+                              props.selectedCell !== null &&
+                              props.selectedCell.rowIndex === rowIdx &&
+                              props.selectedCell.columnIndex === cellIdx;
+
+                            const handleClick = () => {
+                              const columns = props.result?.columns;
+                              if (!columns) return;
+
+                              props.onCellSelect({
+                                rowIndex: rowIdx,
+                                columnIndex: cellIdx,
+                                value: cell,
+                                columnName: columns[cellIdx],
+                              });
+                            };
+
+                            return (
+                              <td
+                                class={cell === null ? "null" : ""}
+                                classList={{ "selected-cell": isSelected() }}
+                                onClick={handleClick}
+                              >
+                                {formatValue(cell)}
+                              </td>
+                            );
+                          }}
                         </For>
                       </tr>
                     )}

@@ -23,6 +23,7 @@ pub fn run() {
             list_schemas,
             list_tables,
             list_views,
+            list_functions,
             list_columns,
             list_indexes,
             list_constraints,

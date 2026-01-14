@@ -122,6 +122,17 @@ pub async fn list_views(
 }
 
 #[tauri::command]
+pub async fn list_functions(
+    connection_id: String,
+    database: String,
+    schema: String,
+) -> Result<Vec<String>, String> {
+    get_manager()
+        .list_functions(&connection_id, &database, &schema)
+        .await
+}
+
+#[tauri::command]
 pub async fn list_columns(
     connection_id: String,
     database: String,
