@@ -3,8 +3,12 @@
 
 import { invoke } from "@tauri-apps/api/core";
 import type {
+  Category,
   ConnectionConfig,
   SaveConnectionInput,
+  UpdateConnectionInput,
+  SaveCategoryInput,
+  UpdateCategoryInput,
   ColumnInfo,
   IndexInfo,
   ConstraintInfo,
@@ -12,6 +16,14 @@ import type {
   QueryResult,
   QueryHistoryEntry,
   QueryHistoryFilter,
+  AwsProfile,
+  AwsParameter,
+  AwsSecret,
+  KubeContext,
+  KubeNamespace,
+  KubeSecret,
+  KubeSecretKey,
+  ParsedConnection,
 } from "./types";
 
 export async function saveConnection(
@@ -26,6 +38,12 @@ export async function listConnections(): Promise<ConnectionConfig[]> {
 
 export async function deleteConnection(id: string): Promise<void> {
   return invoke("delete_connection", { id });
+}
+
+export async function updateConnection(
+  input: UpdateConnectionInput
+): Promise<ConnectionConfig> {
+  return invoke("update_connection", { input });
 }
 
 export async function connect(id: string): Promise<string> {
@@ -144,4 +162,97 @@ export async function clearQueryHistory(
   connectionId?: string
 ): Promise<void> {
   return invoke("clear_query_history", { connectionId });
+}
+
+export async function listCategories(): Promise<Category[]> {
+  return invoke("list_categories");
+}
+
+export async function saveCategory(
+  input: SaveCategoryInput
+): Promise<Category> {
+  return invoke("save_category", { input });
+}
+
+export async function updateCategory(
+  input: UpdateCategoryInput
+): Promise<Category> {
+  return invoke("update_category", { input });
+}
+
+export async function deleteCategory(id: string): Promise<void> {
+  return invoke("delete_category", { id });
+}
+
+export async function listAwsProfiles(): Promise<AwsProfile[]> {
+  return invoke("list_aws_profiles");
+}
+
+export async function listSsmParameters(
+  profile: string,
+  region: string,
+  pathPrefix?: string
+): Promise<AwsParameter[]> {
+  return invoke("list_ssm_parameters", { profile, region, pathPrefix });
+}
+
+export async function getSsmParameterValue(
+  profile: string,
+  region: string,
+  name: string
+): Promise<string> {
+  return invoke("get_ssm_parameter_value", { profile, region, name });
+}
+
+export async function listAwsSecrets(
+  profile: string,
+  region: string
+): Promise<AwsSecret[]> {
+  return invoke("list_aws_secrets", { profile, region });
+}
+
+export async function getAwsSecretValue(
+  profile: string,
+  region: string,
+  secretId: string
+): Promise<string> {
+  return invoke("get_aws_secret_value", { profile, region, secretId });
+}
+
+export async function listKubeContexts(): Promise<KubeContext[]> {
+  return invoke("list_kube_contexts");
+}
+
+export async function listKubeNamespaces(
+  context: string
+): Promise<KubeNamespace[]> {
+  return invoke("list_kube_namespaces", { context });
+}
+
+export async function listKubeSecrets(
+  context: string,
+  namespace: string
+): Promise<KubeSecret[]> {
+  return invoke("list_kube_secrets", { context, namespace });
+}
+
+export async function listKubeSecretKeys(
+  context: string,
+  namespace: string,
+  secretName: string
+): Promise<KubeSecretKey[]> {
+  return invoke("list_kube_secret_keys", { context, namespace, secretName });
+}
+
+export async function getKubeSecretValue(
+  context: string,
+  namespace: string,
+  secretName: string,
+  key: string
+): Promise<string> {
+  return invoke("get_kube_secret_value", { context, namespace, secretName, key });
+}
+
+export async function parseConnectionUrl(url: string): Promise<ParsedConnection> {
+  return invoke("parse_connection_url", { url });
 }

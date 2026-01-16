@@ -1,9 +1,13 @@
 // ABOUTME: Tauri command handlers for frontend-backend communication.
 // ABOUTME: Exposes database operations and connection management to the UI.
 
+use crate::cloud::{
+    self, AwsParameter, AwsProfile, AwsSecret, KubeContext, KubeNamespace, KubeSecret,
+    KubeSecretKey, ParsedConnection,
+};
 use crate::db::{ColumnInfo, ConnectionManager, ConstraintInfo, FunctionInfo, IndexInfo, QueryResult};
 use crate::history::{HistoryManager, QueryHistoryEntry, QueryHistoryFilter};
-use crate::storage::{self, ConnectionConfig, DatabaseType};
+use crate::storage::{self, Category, ConnectionConfig, DatabaseType};
 use std::sync::OnceLock;
 use tauri::Manager;
 use tokio::sync::OnceCell;
@@ -37,6 +41,20 @@ pub struct SaveConnectionInput {
     pub username: String,
     pub password: String,
     pub database: Option<String>,
+    pub category_id: Option<String>,
+}
+
+#[derive(serde::Deserialize)]
+pub struct UpdateConnectionInput {
+    pub id: String,
+    pub name: String,
+    pub db_type: DatabaseType,
+    pub host: String,
+    pub port: u16,
+    pub username: String,
+    pub password: String,
+    pub database: Option<String>,
+    pub category_id: Option<String>,
 }
 
 #[tauri::command]
@@ -56,6 +74,7 @@ pub fn save_connection(
         input.username,
         input.password,
         input.database,
+        input.category_id,
     );
     storage::add_connection(&config_dir, config)
 }
@@ -76,6 +95,29 @@ pub fn delete_connection(app: tauri::AppHandle, id: String) -> Result<(), String
         .app_config_dir()
         .map_err(|e| format!("Failed to get config directory: {}", e))?;
     storage::remove_connection(&config_dir, &id)
+}
+
+#[tauri::command]
+pub fn update_connection(
+    app: tauri::AppHandle,
+    input: UpdateConnectionInput,
+) -> Result<ConnectionConfig, String> {
+    let config_dir = app
+        .path()
+        .app_config_dir()
+        .map_err(|e| format!("Failed to get config directory: {}", e))?;
+    let config = ConnectionConfig {
+        id: input.id,
+        name: input.name,
+        db_type: input.db_type,
+        host: input.host,
+        port: input.port,
+        username: input.username,
+        password: input.password,
+        database: input.database,
+        category_id: input.category_id,
+    };
+    storage::update_connection(&config_dir, config)
 }
 
 #[tauri::command]
@@ -247,4 +289,141 @@ pub async fn clear_query_history(
 ) -> Result<(), String> {
     let history = get_history_manager(&app).await?;
     history.clear_history(connection_id).await
+}
+
+#[derive(serde::Deserialize)]
+pub struct SaveCategoryInput {
+    pub name: String,
+    pub color: String,
+}
+
+#[derive(serde::Deserialize)]
+pub struct UpdateCategoryInput {
+    pub id: String,
+    pub name: String,
+    pub color: String,
+}
+
+#[tauri::command]
+pub fn list_categories(app: tauri::AppHandle) -> Result<Vec<Category>, String> {
+    let config_dir = app
+        .path()
+        .app_config_dir()
+        .map_err(|e| format!("Failed to get config directory: {}", e))?;
+    Ok(storage::load_categories(&config_dir))
+}
+
+#[tauri::command]
+pub fn save_category(app: tauri::AppHandle, input: SaveCategoryInput) -> Result<Category, String> {
+    let config_dir = app
+        .path()
+        .app_config_dir()
+        .map_err(|e| format!("Failed to get config directory: {}", e))?;
+    let category = Category::new(input.name, input.color);
+    storage::add_category(&config_dir, category)
+}
+
+#[tauri::command]
+pub fn update_category(
+    app: tauri::AppHandle,
+    input: UpdateCategoryInput,
+) -> Result<Category, String> {
+    let config_dir = app
+        .path()
+        .app_config_dir()
+        .map_err(|e| format!("Failed to get config directory: {}", e))?;
+    let category = Category {
+        id: input.id,
+        name: input.name,
+        color: input.color,
+    };
+    storage::update_category(&config_dir, category)
+}
+
+#[tauri::command]
+pub fn delete_category(app: tauri::AppHandle, id: String) -> Result<(), String> {
+    let config_dir = app
+        .path()
+        .app_config_dir()
+        .map_err(|e| format!("Failed to get config directory: {}", e))?;
+    storage::remove_category(&config_dir, &id)
+}
+
+#[tauri::command]
+pub fn list_aws_profiles() -> Result<Vec<AwsProfile>, String> {
+    cloud::list_aws_profiles()
+}
+
+#[tauri::command]
+pub async fn list_ssm_parameters(
+    profile: String,
+    region: String,
+    path_prefix: Option<String>,
+) -> Result<Vec<AwsParameter>, String> {
+    cloud::list_ssm_parameters(&profile, &region, path_prefix.as_deref()).await
+}
+
+#[tauri::command]
+pub async fn get_ssm_parameter_value(
+    profile: String,
+    region: String,
+    name: String,
+) -> Result<String, String> {
+    cloud::get_ssm_parameter_value(&profile, &region, &name).await
+}
+
+#[tauri::command]
+pub async fn list_aws_secrets(profile: String, region: String) -> Result<Vec<AwsSecret>, String> {
+    cloud::list_aws_secrets(&profile, &region).await
+}
+
+#[tauri::command]
+pub async fn get_aws_secret_value(
+    profile: String,
+    region: String,
+    secret_id: String,
+) -> Result<String, String> {
+    cloud::get_aws_secret_value(&profile, &region, &secret_id).await
+}
+
+#[tauri::command]
+pub fn list_kube_contexts() -> Result<Vec<KubeContext>, String> {
+    cloud::list_kube_contexts()
+}
+
+#[tauri::command]
+pub async fn list_kube_namespaces(context: String) -> Result<Vec<KubeNamespace>, String> {
+    cloud::list_kube_namespaces(&context).await
+}
+
+#[tauri::command]
+pub async fn list_kube_secrets(
+    context: String,
+    namespace: String,
+) -> Result<Vec<KubeSecret>, String> {
+    cloud::list_kube_secrets(&context, &namespace).await
+}
+
+#[tauri::command]
+pub async fn list_kube_secret_keys(
+    context: String,
+    namespace: String,
+    secret_name: String,
+) -> Result<Vec<KubeSecretKey>, String> {
+    cloud::list_kube_secret_keys(&context, &namespace, &secret_name).await
+}
+
+#[tauri::command]
+pub async fn get_kube_secret_value(
+    context: String,
+    namespace: String,
+    secret_name: String,
+    key: String,
+) -> Result<String, String> {
+    cloud::get_kube_secret_value(&context, &namespace, &secret_name, &key).await
+}
+
+#[tauri::command]
+pub fn parse_connection_url(url: String) -> Result<ParsedConnection, String> {
+    cloud::parse_connection_url(&url).map_err(|e| e.to_string())
 }

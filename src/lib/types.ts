@@ -3,6 +3,12 @@
 
 export type DatabaseType = "postgres" | "mysql" | "sqlite";
 
+export interface Category {
+  id: string;
+  name: string;
+  color: string;
+}
+
 export interface ConnectionConfig {
   id: string;
   name: string;
@@ -12,6 +18,7 @@ export interface ConnectionConfig {
   username: string;
   password: string;
   database: string | null;
+  category_id: string | null;
 }
 
 export interface SaveConnectionInput {
@@ -22,6 +29,30 @@ export interface SaveConnectionInput {
   username: string;
   password: string;
   database: string | null;
+  category_id: string | null;
+}
+
+export interface UpdateConnectionInput {
+  id: string;
+  name: string;
+  db_type: DatabaseType;
+  host: string;
+  port: number;
+  username: string;
+  password: string;
+  database: string | null;
+  category_id: string | null;
+}
+
+export interface SaveCategoryInput {
+  name: string;
+  color: string;
+}
+
+export interface UpdateCategoryInput {
+  id: string;
+  name: string;
+  color: string;
 }
 
 export interface ColumnInfo {
@@ -65,6 +96,7 @@ export interface TreeNode {
   id: string;
   label: string;
   type:
+    | "category"
     | "connection"
     | "database"
     | "schema"
@@ -127,4 +159,51 @@ export interface QueryHistoryFilter {
   search_query?: string;
   limit?: number;
   offset?: number;
+}
+
+export interface AwsProfile {
+  name: string;
+  region: string | null;
+}
+
+export interface AwsParameter {
+  name: string;
+  parameter_type: string;
+  last_modified: string | null;
+}
+
+export interface AwsSecret {
+  name: string;
+  arn: string;
+  description: string | null;
+  last_modified: string | null;
+}
+
+export interface KubeContext {
+  name: string;
+  cluster: string;
+  user: string;
+}
+
+export interface KubeNamespace {
+  name: string;
+}
+
+export interface KubeSecret {
+  name: string;
+  namespace: string;
+  secret_type: string;
+}
+
+export interface KubeSecretKey {
+  key: string;
+}
+
+export interface ParsedConnection {
+  db_type: DatabaseType;
+  host: string;
+  port: number;
+  username: string;
+  password: string;
+  database: string | null;
 }
