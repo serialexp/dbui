@@ -33,7 +33,16 @@ export function ConnectionForm(props: Props) {
       // SQLite: sqlite:/path or just /path or file.db
       if (url.startsWith("sqlite:")) {
         setDbType("sqlite");
-        setFilePath(url.replace("sqlite:", ""));
+        const path = url.replace("sqlite:", "");
+        setFilePath(path);
+
+        // Auto-populate connection name with filename if name is empty
+        if (!name().trim() && path) {
+          const filename = path.split('/').pop()?.replace(/\.db$/i, '') || path;
+          if (filename) {
+            setName(filename);
+          }
+        }
         return;
       }
 
@@ -51,6 +60,11 @@ export function ConnectionForm(props: Props) {
         setHost(h || "localhost");
         setPort(p ? parseInt(p) : type === "mysql" ? 3306 : 5432);
         setDatabase(db || "");
+
+        // Auto-populate connection name with database name if name is empty
+        if (!name().trim() && db) {
+          setName(db);
+        }
       }
     } finally {
       setUpdatingFromUrl(false);
@@ -106,6 +120,25 @@ export function ConnectionForm(props: Props) {
     setUpdatingFromFields(true);
     setConnectionUrl(buildConnectionUrl());
     setUpdatingFromFields(false);
+  });
+
+  // Auto-populate name from database when database changes (and name is empty)
+  createEffect(() => {
+    if (updatingFromUrl()) return;
+
+    const db = database();
+    const path = filePath();
+
+    if (!name().trim()) {
+      if (dbType() === "sqlite" && path) {
+        const filename = path.split('/').pop()?.replace(/\.db$/i, '') || '';
+        if (filename) {
+          setName(filename);
+        }
+      } else if (db) {
+        setName(db);
+      }
+    }
   });
 
   const handleUrlChange = (url: string) => {

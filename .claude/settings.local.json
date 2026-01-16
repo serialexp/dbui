@@ -10,7 +10,8 @@
       "Bash(pnpm tauri:*)",
       "Bash(pnpm remove:*)",
       "Bash(npm run check:*)",
-      "Bash(cd:*)"
+      "Bash(cd:*)",
+      "Bash(chmod:*)"
     ]
   }
 }

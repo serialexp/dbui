@@ -14,14 +14,11 @@ import {
   generateIndexSQL,
   generateConstraintSQL,
 } from "../lib/sqlGenerator";
-import { Icon } from "./Icon";
-import xSvg from "@phosphor-icons/core/assets/regular/x.svg?raw";
 
 interface Props {
   view: MetadataView;
   selectedRow: number | null;
   onRowSelect: (rowIndex: number) => void;
-  onClose: () => void;
   dbType: DatabaseType | null;
 }
 
@@ -79,12 +76,6 @@ export function MetadataTable(props: Props) {
     }
   };
 
-  const getTitle = (): string => {
-    if (!props.view) return "";
-    const typeLabel = props.view.type.charAt(0).toUpperCase() + props.view.type.slice(1);
-    return `${typeLabel} - ${props.view.schema}.${props.view.table}`;
-  };
-
   const getSQLDefinition = (): string => {
     if (!props.view || props.selectedRow === null) return "";
 
@@ -111,13 +102,6 @@ export function MetadataTable(props: Props) {
 
   return (
     <div class="metadata-table">
-      <div class="metadata-header">
-        <span>{getTitle()}</span>
-        <button class="close-button" onClick={props.onClose} title="Close">
-          <Icon svg={xSvg} />
-        </button>
-      </div>
-
       <div class="metadata-content">
         <div class="table-wrapper">
           <table>

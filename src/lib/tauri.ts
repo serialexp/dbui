@@ -10,6 +10,8 @@ import type {
   ConstraintInfo,
   FunctionInfo,
   QueryResult,
+  QueryHistoryEntry,
+  QueryHistoryFilter,
 } from "./types";
 
 export async function saveConnection(
@@ -112,6 +114,34 @@ export async function listConstraints(
 export async function executeQuery(
   connectionId: string,
   query: string
-): Promise<QueryResult> {
+): Promise<[QueryResult, number]> {
   return invoke("execute_query", { connectionId, query });
+}
+
+export async function saveQueryHistory(
+  entry: QueryHistoryEntry
+): Promise<void> {
+  return invoke("save_query_history", { entry });
+}
+
+export async function getQueryHistory(
+  filter: QueryHistoryFilter
+): Promise<QueryHistoryEntry[]> {
+  return invoke("get_query_history", { filter });
+}
+
+export async function searchQueryHistory(
+  filter: QueryHistoryFilter
+): Promise<QueryHistoryEntry[]> {
+  return invoke("search_query_history", { filter });
+}
+
+export async function deleteQueryHistory(id: string): Promise<void> {
+  return invoke("delete_query_history", { id });
+}
+
+export async function clearQueryHistory(
+  connectionId?: string
+): Promise<void> {
+  return invoke("clear_query_history", { connectionId });
 }

@@ -57,3 +57,25 @@ dev:
 # Build the app for production
 build:
     pnpm run tauri build
+
+# Build for macOS Apple Silicon
+build-macos-arm:
+    pnpm run tauri build -- --target aarch64-apple-darwin
+
+# Build for macOS Intel
+build-macos-intel:
+    pnpm run tauri build -- --target x86_64-apple-darwin
+
+# Build for both macOS architectures
+build-macos-universal: build-macos-arm build-macos-intel
+
+# Clean build artifacts
+clean:
+    cargo clean --manifest-path=src-tauri/Cargo.toml
+    rm -rf dist
+    rm -rf src-tauri/target
+
+# Test the install script locally
+test-install:
+    @echo "Note: This will test against the latest GitHub release"
+    bash install.sh

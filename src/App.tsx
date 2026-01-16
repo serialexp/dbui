@@ -1,9 +1,9 @@
 // ABOUTME: Main application component for DBUI.
 // ABOUTME: Orchestrates sidebar, query editor, and results display.
 
-import { createSignal, Show } from "solid-js";
+import { createSignal, Show, onMount, onCleanup } from "solid-js";
 import type { DatabaseType, QueryResult, CellSelection, MetadataView, FunctionInfo } from "./lib/types";
-import { executeQuery, listConnections, getFunctionDefinition } from "./lib/tauri";
+import { executeQuery, listConnections, getFunctionDefinition, saveQueryHistory } from "./lib/tauri";
 import { Sidebar } from "./components/Sidebar";
 import { QueryEditor } from "./components/QueryEditor";
 import { ResultsTable } from "./components/ResultsTable";
@@ -11,6 +11,7 @@ import { CellInspector } from "./components/CellInspector";
 import { MetadataTable } from "./components/MetadataTable";
 import { FunctionViewer } from "./components/FunctionViewer";
 import { ConnectionPath } from "./components/ConnectionPath";
+import { QueryHistory } from "./components/QueryHistory";
 import "./styles/app.css";
 
 function App() {
@@ -29,6 +30,7 @@ function App() {
   const [metadataView, setMetadataView] = createSignal<MetadataView>(null);
   const [selectedMetadataRow, setSelectedMetadataRow] = createSignal<number | null>(null);
   const [functionInfo, setFunctionInfo] = createSignal<FunctionInfo | null>(null);
+  const [showHistory, setShowHistory] = createSignal(false);
 
   const handleConnectionChange = async (id: string | null) => {
     setActiveConnectionId(id);
@@ -91,13 +93,6 @@ function App() {
     setSelectedMetadataRow(rowIndex);
   };
 
-  const handleMetadataClose = () => {
-    setMetadataView(null);
-    setSelectedMetadataRow(null);
-    setActiveTable(null);
-    setActiveViewType(null);
-  };
-
   const handleFunctionSelect = async (
     connectionId: string,
     database: string,
@@ -118,16 +113,13 @@ function App() {
     }
   };
 
-  const handleFunctionClose = () => {
-    setFunctionInfo(null);
-    setActiveTable(null);
-    setActiveViewType(null);
-  };
-
   const handleExecute = async (queryToExecute: string) => {
     const connId = activeConnectionId();
-    if (!connId) {
-      setError("No connection selected");
+    const db = activeDatabase();
+    const sch = activeSchema() || "";
+
+    if (!connId || !db) {
+      setError("No connection or database selected");
       return;
     }
 
@@ -138,14 +130,54 @@ function App() {
     setMetadataView(null);
 
     try {
-      const res = await executeQuery(connId, queryToExecute);
+      const [res, backendTime] = await executeQuery(connId, queryToExecute);
       setResult(res);
+
+      saveQueryHistory({
+        id: crypto.randomUUID(),
+        connection_id: connId,
+        database: db,
+        schema: sch,
+        query: queryToExecute,
+        timestamp: new Date().toISOString(),
+        execution_time_ms: backendTime,
+        row_count: res.row_count,
+        success: true,
+        error_message: null,
+      }).catch(console.error);
+
     } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
+      const errorMsg = err instanceof Error ? err.message : String(err);
+      setError(errorMsg);
+
+      saveQueryHistory({
+        id: crypto.randomUUID(),
+        connection_id: connId,
+        database: db,
+        schema: sch,
+        query: queryToExecute,
+        timestamp: new Date().toISOString(),
+        execution_time_ms: 0,
+        row_count: 0,
+        success: false,
+        error_message: errorMsg,
+      }).catch(console.error);
+
     } finally {
       setLoading(false);
     }
   };
+
+  onMount(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.key === 'h') {
+        e.preventDefault();
+        setShowHistory(true);
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    onCleanup(() => window.removeEventListener('keydown', handleKeyDown));
+  });
 
   return (
     <div class="app">
@@ -182,7 +214,6 @@ function App() {
             view={metadataView()!}
             selectedRow={selectedMetadataRow()}
             onRowSelect={handleMetadataRowSelect}
-            onClose={handleMetadataClose}
             dbType={activeDbType()}
           />
         </Show>
@@ -191,7 +222,6 @@ function App() {
           <FunctionViewer
             functionInfo={functionInfo()}
             dbType={activeDbType()}
-            onClose={handleFunctionClose}
           />
         </Show>
 
@@ -211,6 +241,19 @@ function App() {
               onClose={() => setSelectedCell(null)}
             />
           </div>
+        </Show>
+
+        <Show when={showHistory()}>
+          <QueryHistory
+            onClose={() => setShowHistory(false)}
+            onQuerySelect={(query) => {
+              setQuery(query);
+              setShowHistory(false);
+            }}
+            connectionId={activeConnectionId()}
+            database={activeDatabase()}
+            schema={activeSchema()}
+          />
         </Show>
       </main>
     </div>

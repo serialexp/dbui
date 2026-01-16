@@ -7,8 +7,8 @@ import plugsConnectedSvg from "@phosphor-icons/core/assets/regular/plugs-connect
 import databaseSvg from "@phosphor-icons/core/assets/regular/database.svg?raw";
 import foldersSvg from "@phosphor-icons/core/assets/regular/folders.svg?raw";
 import tableSvg from "@phosphor-icons/core/assets/regular/table.svg?raw";
-import gridNineSvg from "@phosphor-icons/core/assets/regular/grid-nine.svg?raw";
 import rowsSvg from "@phosphor-icons/core/assets/regular/rows.svg?raw";
+import columnsSvg from "@phosphor-icons/core/assets/regular/columns.svg?raw";
 import lightningSvg from "@phosphor-icons/core/assets/regular/lightning.svg?raw";
 import lockSvg from "@phosphor-icons/core/assets/regular/lock.svg?raw";
 import functionSvg from "@phosphor-icons/core/assets/regular/function.svg?raw";
@@ -25,9 +25,9 @@ export function ConnectionPath(props: Props) {
   const getViewIcon = (viewType: string) => {
     switch (viewType) {
       case "data":
-        return gridNineSvg;
-      case "columns":
         return rowsSvg;
+      case "columns":
+        return columnsSvg;
       case "indexes":
         return lightningSvg;
       case "constraints":

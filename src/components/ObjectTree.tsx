@@ -17,8 +17,8 @@ import foldersSvg from "@phosphor-icons/core/assets/regular/folders.svg?raw";
 import dotOutlineSvg from "@phosphor-icons/core/assets/regular/dot-outline.svg?raw";
 import tableSvg from "@phosphor-icons/core/assets/regular/table.svg?raw";
 import eyeSvg from "@phosphor-icons/core/assets/regular/eye.svg?raw";
-import gridNineSvg from "@phosphor-icons/core/assets/regular/grid-nine.svg?raw";
 import rowsSvg from "@phosphor-icons/core/assets/regular/rows.svg?raw";
+import columnsSvg from "@phosphor-icons/core/assets/regular/columns.svg?raw";
 import lightningSvg from "@phosphor-icons/core/assets/regular/lightning.svg?raw";
 import lockSvg from "@phosphor-icons/core/assets/regular/lock.svg?raw";
 import functionSvg from "@phosphor-icons/core/assets/regular/function.svg?raw";
@@ -338,10 +338,10 @@ export function ObjectTree(props: Props) {
         return <Icon svg={foldersSvg} size={iconSize} />;
       case "tables":
       case "views":
-      case "columns":
-        return <Icon svg={rowsSvg} size={iconSize} />;
       case "functions":
         return <Icon svg={rowsSvg} size={iconSize} />;
+      case "columns":
+        return <Icon svg={columnsSvg} size={iconSize} />;
       case "indexes":
         return <Icon svg={lightningSvg} size={iconSize} />;
       case "constraints":
@@ -353,7 +353,7 @@ export function ObjectTree(props: Props) {
       case "function":
         return <Icon svg={functionSvg} size={iconSize} />;
       case "data":
-        return <Icon svg={gridNineSvg} size={iconSize} />;
+        return <Icon svg={rowsSvg} size={iconSize} />;
       default:
         return null;
     }

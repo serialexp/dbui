@@ -2,14 +2,30 @@
 // ABOUTME: Exposes database operations and connection management to the UI.
 
 use crate::db::{ColumnInfo, ConnectionManager, ConstraintInfo, FunctionInfo, IndexInfo, QueryResult};
+use crate::history::{HistoryManager, QueryHistoryEntry, QueryHistoryFilter};
 use crate::storage::{self, ConnectionConfig, DatabaseType};
 use std::sync::OnceLock;
 use tauri::Manager;
+use tokio::sync::OnceCell;
 
 static CONNECTION_MANAGER: OnceLock<ConnectionManager> = OnceLock::new();
+static HISTORY_MANAGER: OnceCell<HistoryManager> = OnceCell::const_new();
 
 fn get_manager() -> &'static ConnectionManager {
     CONNECTION_MANAGER.get_or_init(ConnectionManager::new)
+}
+
+async fn get_history_manager(app: &tauri::AppHandle) -> Result<&'static HistoryManager, String> {
+    HISTORY_MANAGER
+        .get_or_try_init(|| async {
+            let config_dir = app
+                .path()
+                .app_config_dir()
+                .map_err(|e| format!("Failed to get config directory: {}", e))?;
+            let history_db_path = config_dir.join("history.db");
+            HistoryManager::new(&history_db_path).await
+        })
+        .await
 }
 
 #[derive(serde::Deserialize)]
@@ -181,6 +197,54 @@ pub async fn list_constraints(
 }
 
 #[tauri::command]
-pub async fn execute_query(connection_id: String, query: String) -> Result<QueryResult, String> {
-    get_manager().execute_query(&connection_id, &query).await
+pub async fn execute_query(connection_id: String, query: String) -> Result<(QueryResult, u64), String> {
+    let start = std::time::Instant::now();
+    let result = get_manager().execute_query(&connection_id, &query).await?;
+    let elapsed_ms = start.elapsed().as_millis() as u64;
+    Ok((result, elapsed_ms))
+}
+
+#[tauri::command]
+pub async fn save_query_history(
+    app: tauri::AppHandle,
+    entry: QueryHistoryEntry,
+) -> Result<(), String> {
+    let history = get_history_manager(&app).await?;
+    history.save_entry(entry).await
+}
+
+#[tauri::command]
+pub async fn get_query_history(
+    app: tauri::AppHandle,
+    filter: QueryHistoryFilter,
+) -> Result<Vec<QueryHistoryEntry>, String> {
+    let history = get_history_manager(&app).await?;
+    history.get_entries(filter).await
+}
+
+#[tauri::command]
+pub async fn search_query_history(
+    app: tauri::AppHandle,
+    filter: QueryHistoryFilter,
+) -> Result<Vec<QueryHistoryEntry>, String> {
+    let history = get_history_manager(&app).await?;
+    history.search_entries(filter).await
+}
+
+#[tauri::command]
+pub async fn delete_query_history(
+    app: tauri::AppHandle,
+    id: String,
+) -> Result<(), String> {
+    let history = get_history_manager(&app).await?;
+    history.delete_entry(&id).await
+}
+
+#[tauri::command]
+pub async fn clear_query_history(
+    app: tauri::AppHandle,
+    connection_id: Option<String>,
+) -> Result<(), String> {
+    let history = get_history_manager(&app).await?;
+    history.clear_history(connection_id).await
 }

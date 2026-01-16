@@ -103,3 +103,28 @@ export type MetadataView = {
   schema: string;
   table: string;
 } | null;
+
+export interface QueryHistoryEntry {
+  id: string;
+  connection_id: string;
+  database: string;
+  schema: string;
+  query: string;
+  timestamp: string;
+  execution_time_ms: number;
+  row_count: number;
+  success: boolean;
+  error_message: string | null;
+}
+
+export interface QueryHistoryFilter {
+  connection_id?: string;
+  database?: string;
+  schema?: string;
+  start_date?: string;
+  end_date?: string;
+  success_only?: boolean;
+  search_query?: string;
+  limit?: number;
+  offset?: number;
+}

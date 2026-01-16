@@ -3,6 +3,7 @@
 
 mod commands;
 mod db;
+mod history;
 mod storage;
 
 use commands::*;
@@ -29,6 +30,11 @@ pub fn run() {
             list_indexes,
             list_constraints,
             execute_query,
+            save_query_history,
+            get_query_history,
+            search_query_history,
+            delete_query_history,
+            clear_query_history,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
