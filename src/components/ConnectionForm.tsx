@@ -21,8 +21,8 @@ export function ConnectionForm(props: Props) {
   const [password, setPassword] = createSignal("");
   const [database, setDatabase] = createSignal("");
   const [filePath, setFilePath] = createSignal("");
-  const [connectionUrl, setConnectionUrl] = createSignal("");
   const [categoryId, setCategoryId] = createSignal<string | null>(null);
+  const [connectionUrl, setConnectionUrl] = createSignal("");
   const [visibleDatabases, setVisibleDatabases] = createSignal<number>(4);
   const [sslMode, setSslMode] = createSignal<SslMode>("disable");
   const [error, setError] = createSignal<string | null>(null);
@@ -75,7 +75,8 @@ export function ConnectionForm(props: Props) {
 
         // Auto-populate connection name with filename if name is empty
         if (!name().trim() && path) {
-          const filename = path.split('/').pop()?.replace(/\.db$/i, '') || path;
+          const filename =
+            path.split("/").pop()?.replace(/\.db$/i, "") || path;
           if (filename) {
             setName(filename);
           }
@@ -216,7 +217,7 @@ export function ConnectionForm(props: Props) {
 
     if (!name().trim()) {
       if (dbType() === "sqlite" && path) {
-        const filename = path.split('/').pop()?.replace(/\.db$/i, '') || '';
+        const filename = path.split("/").pop()?.replace(/\.db$/i, "") || "";
         if (filename) {
           setName(filename);
         }
@@ -291,6 +292,9 @@ export function ConnectionForm(props: Props) {
   const isServerBased = () => dbType() !== "sqlite";
   const isRedis = () => dbType() === "redis";
 
+  const selectedCategory = () =>
+    props.categories.find((c) => c.id === categoryId());
+
   return (
     <div class="modal-overlay" onClick={() => props.onClose()}>
       <div class="modal" onClick={(e) => e.stopPropagation()}>
@@ -308,16 +312,18 @@ export function ConnectionForm(props: Props) {
             />
           </div>
 
-          <div class="form-group">
-            <label for="connectionUrl">Connection URL</label>
-            <input
-              id="connectionUrl"
-              type="text"
-              value={connectionUrl()}
-              onInput={(e) => handleUrlChange(e.currentTarget.value)}
-              placeholder="postgres://user:pass@localhost:5432/db"
-            />
-          </div>
+          <Show when={!isEditing()}>
+            <div class="form-group">
+              <label for="connectionUrl">Connection URL</label>
+              <input
+                id="connectionUrl"
+                type="text"
+                value={connectionUrl()}
+                onInput={(e) => handleUrlChange(e.currentTarget.value)}
+                placeholder="postgres://user:pass@localhost:5432/db"
+              />
+            </div>
+          </Show>
 
           <div class="form-group">
             <label>Database Type</label>
@@ -433,7 +439,9 @@ export function ConnectionForm(props: Props) {
                   id="port"
                   type="number"
                   value={port()}
-                  onInput={(e) => setPort(parseInt(e.currentTarget.value) || 0)}
+                  onInput={(e) =>
+                    setPort(parseInt(e.currentTarget.value) || 0)
+                  }
                   required
                 />
               </div>
@@ -531,7 +539,7 @@ export function ConnectionForm(props: Props) {
               Cancel
             </button>
             <button type="submit" class="primary" disabled={saving()}>
-              {saving() ? "Saving..." : "Save"}
+              {saving() ? "Saving..." : isEditing() ? "Update" : "Save"}
             </button>
           </div>
         </form>
