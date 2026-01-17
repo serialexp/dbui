@@ -7,6 +7,7 @@ set -euo pipefail
 REPO="serialexp/dbui"
 APP_NAME="dbui"
 DISPLAY_NAME="DBUI"
+ICON_URL="https://raw.githubusercontent.com/${REPO}/main/src-tauri/icons/icon.png"
 
 # Colors for output
 RED='\033[0;31m'
@@ -17,6 +18,58 @@ NC='\033[0m' # No Color
 info() { echo -e "${GREEN}==>${NC} $1"; }
 warn() { echo -e "${YELLOW}warning:${NC} $1"; }
 error() { echo -e "${RED}error:${NC} $1" >&2; exit 1; }
+
+# Create desktop entry for Linux systems that support XDG
+create_desktop_entry() {
+    local bin_path="$1"
+    local icon_dir="${HOME}/.local/share/icons/hicolor/256x256/apps"
+    local desktop_dir="${HOME}/.local/share/applications"
+    local icon_path="${icon_dir}/${APP_NAME}.png"
+    local desktop_path="${desktop_dir}/${APP_NAME}.desktop"
+
+    # Check if the system supports XDG desktop entries
+    if [[ ! -d "${HOME}/.local/share" ]]; then
+        warn "XDG data directory not found, skipping desktop entry creation"
+        return 0
+    fi
+
+    info "Creating desktop entry..."
+
+    # Create directories if needed
+    mkdir -p "$icon_dir"
+    mkdir -p "$desktop_dir"
+
+    # Download icon
+    if curl -sL "$ICON_URL" -o "$icon_path" 2>/dev/null; then
+        info "Downloaded application icon"
+    else
+        warn "Could not download icon, desktop entry will use generic icon"
+        icon_path=""
+    fi
+
+    # Create desktop entry file
+    cat > "$desktop_path" << EOF
+[Desktop Entry]
+Name=${DISPLAY_NAME}
+Comment=Database User Interface
+Exec=${bin_path}
+Icon=${icon_path:-application-x-executable}
+Type=Application
+Categories=Development;Database;
+Terminal=false
+StartupWMClass=${APP_NAME}
+EOF
+
+    # Make desktop entry executable (required by some desktop environments)
+    chmod +x "$desktop_path"
+
+    # Update desktop database if available
+    if command -v update-desktop-database &> /dev/null; then
+        update-desktop-database "$desktop_dir" 2>/dev/null || true
+    fi
+
+    info "Desktop entry created at ${desktop_path}"
+}
 
 # Detect OS and architecture
 detect_platform() {
@@ -95,9 +148,13 @@ install_linux() {
         mv "${tmp_dir}/${asset_name}" "${bin_dir}/${APP_NAME}"
         chmod +x "${bin_dir}/${APP_NAME}"
 
+        # Create desktop entry for application menu integration
+        create_desktop_entry "${bin_dir}/${APP_NAME}"
+
         info "Installation complete!"
         echo ""
         echo "  Binary installed to: ${bin_dir}/${APP_NAME}"
+        echo "  Desktop entry: ~/.local/share/applications/${APP_NAME}.desktop"
         echo ""
 
         # Check if bin_dir is in PATH
