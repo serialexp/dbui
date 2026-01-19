@@ -1,7 +1,7 @@
 // ABOUTME: Shared TypeScript types for the DBUI frontend.
 // ABOUTME: Mirrors Rust structs for type-safe communication.
 
-export type DatabaseType = "postgres" | "mysql" | "sqlite";
+export type DatabaseType = "postgres" | "mysql" | "sqlite" | "redis";
 
 export interface Category {
   id: string;
@@ -113,7 +113,12 @@ export interface TreeNode {
     | "index"
     | "constraints"
     | "constraint"
-    | "empty";
+    | "empty"
+    | "redis-keys"
+    | "redis-lists"
+    | "redis-hashes"
+    | "redis-sets"
+    | "redis-sorted-sets";
   children?: TreeNode[];
   expanded?: boolean;
   loading?: boolean;

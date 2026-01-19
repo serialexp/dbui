@@ -1,8 +1,9 @@
 // ABOUTME: Displays the active connection path breadcrumb.
 // ABOUTME: Shows connection name, database, and schema to provide context.
 
-import { Show } from "solid-js";
+import { Show, createSignal, createEffect } from "solid-js";
 import { Icon } from "./Icon";
+import { getQueryHistory } from "../lib/tauri";
 import plugsConnectedSvg from "@phosphor-icons/core/assets/regular/plugs-connected.svg?raw";
 import databaseSvg from "@phosphor-icons/core/assets/regular/database.svg?raw";
 import foldersSvg from "@phosphor-icons/core/assets/regular/folders.svg?raw";
@@ -12,16 +13,40 @@ import columnsSvg from "@phosphor-icons/core/assets/regular/columns.svg?raw";
 import lightningSvg from "@phosphor-icons/core/assets/regular/lightning.svg?raw";
 import lockSvg from "@phosphor-icons/core/assets/regular/lock.svg?raw";
 import functionSvg from "@phosphor-icons/core/assets/regular/function.svg?raw";
+import clockCounterClockwiseSvg from "@phosphor-icons/core/assets/regular/clock-counter-clockwise.svg?raw";
 
 interface Props {
+  connectionId: string | null;
   connectionName: string | null;
   database: string | null;
   schema: string | null;
   table: string | null;
   viewType: string | null;
+  onHistoryClick?: () => void;
 }
 
 export function ConnectionPath(props: Props) {
+  const [historyCount, setHistoryCount] = createSignal<number>(0);
+
+  createEffect(async () => {
+    const connectionId = props.connectionId;
+    const database = props.database;
+
+    if (connectionId && database) {
+      try {
+        const entries = await getQueryHistory({
+          connection_id: connectionId,
+          database: database,
+        });
+        setHistoryCount(entries.length);
+      } catch {
+        setHistoryCount(0);
+      }
+    } else {
+      setHistoryCount(0);
+    }
+  });
+
   const getViewIcon = (viewType: string) => {
     switch (viewType) {
       case "data":
@@ -67,6 +92,13 @@ export function ConnectionPath(props: Props) {
           <span class="path-separator">›</span>
           <Icon svg={getViewIcon(props.viewType!)} size={14} />
           <span class="path-segment view">{getViewLabel(props.viewType!)}</span>
+        </Show>
+        <Show when={props.database && historyCount() > 0}>
+          <span class="path-spacer" />
+          <button class="path-history" onClick={() => props.onHistoryClick?.()}>
+            <Icon svg={clockCounterClockwiseSvg} size={14} />
+            <span class="path-history-count">{historyCount()}</span>
+          </button>
         </Show>
       </div>
     </Show>

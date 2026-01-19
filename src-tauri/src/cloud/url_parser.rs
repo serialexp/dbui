@@ -1,5 +1,5 @@
 // ABOUTME: Parses database connection URLs into structured connection fields.
-// ABOUTME: Supports postgres://, mysql://, and sqlite:// URL schemes.
+// ABOUTME: Supports postgres://, mysql://, sqlite://, and redis:// URL schemes.
 
 use crate::storage::DatabaseType;
 use serde::{Deserialize, Serialize};
@@ -19,7 +19,7 @@ pub struct ParsedConnection {
 pub enum ParseError {
     #[error("Invalid URL: {0}")]
     InvalidUrl(String),
-    #[error("Unsupported database scheme: {0}. Expected postgres, postgresql, mysql, mariadb, or sqlite")]
+    #[error("Unsupported database scheme: {0}. Expected postgres, postgresql, mysql, mariadb, sqlite, or redis")]
     UnsupportedScheme(String),
     #[error("Missing host in connection URL")]
     MissingHost,
@@ -35,6 +35,7 @@ pub fn parse_connection_url(url_str: &str) -> Result<ParsedConnection, ParseErro
         "postgres" | "postgresql" => DatabaseType::Postgres,
         "mysql" | "mariadb" => DatabaseType::Mysql,
         "sqlite" => DatabaseType::Sqlite,
+        "redis" => DatabaseType::Redis,
         other => return Err(ParseError::UnsupportedScheme(other.to_string())),
     };
 
@@ -56,7 +57,8 @@ pub fn parse_connection_url(url_str: &str) -> Result<ParsedConnection, ParseErro
         .to_string();
 
     let username = url.username();
-    if username.is_empty() {
+    // Redis doesn't require username
+    if username.is_empty() && db_type != DatabaseType::Redis {
         return Err(ParseError::MissingUsername);
     }
 
@@ -67,6 +69,7 @@ pub fn parse_connection_url(url_str: &str) -> Result<ParsedConnection, ParseErro
         DatabaseType::Postgres => 5432,
         DatabaseType::Mysql => 3306,
         DatabaseType::Sqlite => 0,
+        DatabaseType::Redis => 6379,
     };
 
     let port = url.port().unwrap_or(default_port);
@@ -103,6 +106,7 @@ impl PartialEq for DatabaseType {
             (DatabaseType::Postgres, DatabaseType::Postgres)
                 | (DatabaseType::Mysql, DatabaseType::Mysql)
                 | (DatabaseType::Sqlite, DatabaseType::Sqlite)
+                | (DatabaseType::Redis, DatabaseType::Redis)
         )
     }
 }

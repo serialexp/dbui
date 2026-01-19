@@ -8,7 +8,7 @@ import type { TreeNode, ConnectionConfig, Category, MetadataView } from "../lib/
 // Import Phosphor icons as raw SVG strings
 import caretRightSvg from "@phosphor-icons/core/assets/regular/caret-right.svg?raw";
 import caretDownSvg from "@phosphor-icons/core/assets/regular/caret-down.svg?raw";
-import xSvg from "@phosphor-icons/core/assets/regular/x.svg?raw";
+import ejectSvg from "@phosphor-icons/core/assets/regular/eject.svg?raw";
 import trashSvg from "@phosphor-icons/core/assets/regular/trash.svg?raw";
 import pencilSvg from "@phosphor-icons/core/assets/regular/pencil.svg?raw";
 import plugsSvg from "@phosphor-icons/core/assets/regular/plugs.svg?raw";
@@ -55,6 +55,10 @@ interface Props {
 export function ObjectTree(props: Props) {
   const [nodes, setNodes] = createSignal<TreeNode[]>([]);
   const [error, setError] = createSignal<string | null>(null);
+
+  const findConnectionConfig = (connectionId: string): ConnectionConfig | undefined => {
+    return props.connections.find((c) => c.id === connectionId);
+  };
 
   const buildConnectionNodes = () => {
     const categoryMap = new Map<string, Category>();
@@ -186,8 +190,47 @@ export function ObjectTree(props: Props) {
             connectionId: string;
             database: string;
           };
+          const config = findConnectionConfig(connectionId);
           await switchDatabase(connectionId, database);
           props.onDatabaseSwitch(database, null);
+
+          // Redis shows data type categories instead of schemas
+          if (config?.db_type === "redis") {
+            children = [
+              {
+                id: `${node.id}:redis-keys`,
+                label: "Keys",
+                type: "redis-keys" as const,
+                metadata: { connectionId, database },
+              },
+              {
+                id: `${node.id}:redis-lists`,
+                label: "Lists",
+                type: "redis-lists" as const,
+                metadata: { connectionId, database },
+              },
+              {
+                id: `${node.id}:redis-hashes`,
+                label: "Hashes",
+                type: "redis-hashes" as const,
+                metadata: { connectionId, database },
+              },
+              {
+                id: `${node.id}:redis-sets`,
+                label: "Sets",
+                type: "redis-sets" as const,
+                metadata: { connectionId, database },
+              },
+              {
+                id: `${node.id}:redis-sorted-sets`,
+                label: "Sorted Sets",
+                type: "redis-sorted-sets" as const,
+                metadata: { connectionId, database },
+              },
+            ];
+            break;
+          }
+
           const schemas = await listSchemas(connectionId, database);
           children = schemas.map((schema) => ({
             id: `${node.id}:schema:${schema}`,
@@ -384,6 +427,7 @@ export function ObjectTree(props: Props) {
       postgres: "/icons/postgresql.svg",
       mysql: "/icons/mysql.svg",
       sqlite: "/icons/sqlite.svg",
+      redis: "/icons/redis.svg",
     };
     return iconMap[dbType] || "/icons/postgresql.svg";
   };
@@ -419,6 +463,12 @@ export function ObjectTree(props: Props) {
         return <Icon svg={functionSvg} size={iconSize} />;
       case "data":
         return <Icon svg={rowsSvg} size={iconSize} />;
+      case "redis-keys":
+      case "redis-lists":
+      case "redis-hashes":
+      case "redis-sets":
+      case "redis-sorted-sets":
+        return <Icon svg={rowsSvg} size={iconSize} />;
       default:
         return null;
     }
@@ -434,12 +484,26 @@ export function ObjectTree(props: Props) {
     props.onFunctionSelect(connectionId, database, schema, functionName);
   };
 
+  const handleRedisTypeClick = (node: TreeNode) => {
+    // Generate BROWSE command with type filter for each Redis data type
+    const typeFilters: Record<string, string> = {
+      "redis-keys": "BROWSE COUNT 100",
+      "redis-lists": "BROWSE COUNT 100 TYPE list",
+      "redis-hashes": "BROWSE COUNT 100 TYPE hash",
+      "redis-sets": "BROWSE COUNT 100 TYPE set",
+      "redis-sorted-sets": "BROWSE COUNT 100 TYPE zset",
+    };
+
+    const query = typeFilters[node.type] || "BROWSE COUNT 100";
+    props.onQueryGenerate(query);
+  };
+
   const renderNode = (node: TreeNode, depth: number = 0) => {
     const hasChildren =
       node.children && node.children.length > 0 ||
       ["category", "connection", "database", "schema", "tables", "views", "functions", "table"].includes(node.type);
-    const isLeaf = ["view", "function", "data", "columns", "indexes", "constraints", "empty"].includes(node.type);
-    const isClickable = !isLeaf || ["data", "columns", "indexes", "constraints", "function"].includes(node.type);
+    const isLeaf = ["view", "function", "data", "columns", "indexes", "constraints", "empty", "redis-keys", "redis-lists", "redis-hashes", "redis-sets", "redis-sorted-sets"].includes(node.type);
+    const isClickable = !isLeaf || ["data", "columns", "indexes", "constraints", "function", "redis-keys", "redis-lists", "redis-hashes", "redis-sets", "redis-sorted-sets"].includes(node.type);
 
     const getCategoryStyle = () => {
       if (node.type === "category") {
@@ -462,6 +526,8 @@ export function ObjectTree(props: Props) {
           onClick={() => {
             if (node.type === "function") {
               handleFunctionClick(node);
+            } else if (node.type.startsWith("redis-")) {
+              handleRedisTypeClick(node);
             } else if (isClickable) {
               handleToggle(node);
             }
@@ -489,7 +555,7 @@ export function ObjectTree(props: Props) {
                   handleDisconnect(node);
                 }}
               >
-                <Icon svg={xSvg} size={14} />
+                <Icon svg={ejectSvg} size={14} />
               </button>
             </Show>
             <button

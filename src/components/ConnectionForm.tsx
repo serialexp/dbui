@@ -79,7 +79,28 @@ export function ConnectionForm(props: Props) {
         return;
       }
 
-      // Try to parse as URL
+      // Redis: redis://[user:pass@]host[:port][/db]
+      const redisMatch = url.match(
+        /^redis:\/\/(?:([^:@]+)(?::([^@]*))?@)?([^:\/]+)(?::(\d+))?(?:\/(\d+))?$/
+      );
+
+      if (redisMatch) {
+        const [, user, pass, h, p, db] = redisMatch;
+        setDbType("redis");
+        setUsername(user || "");
+        setPassword(pass || "");
+        setHost(h || "localhost");
+        setPort(p ? parseInt(p) : 6379);
+        setDatabase(db || "0");
+
+        // Auto-populate connection name with host if name is empty
+        if (!name().trim() && h) {
+          setName(`Redis - ${h}`);
+        }
+        return;
+      }
+
+      // Try to parse as SQL URL
       const match = url.match(
         /^(postgres|postgresql|mysql):\/\/(?:([^:@]+)(?::([^@]*))?@)?([^:\/]+)(?::(\d+))?(?:\/(.*))?$/
       );
@@ -110,6 +131,33 @@ export function ConnectionForm(props: Props) {
     if (type === "sqlite") {
       const path = filePath();
       return path ? `sqlite:${path}` : "";
+    }
+
+    if (type === "redis") {
+      const user = username();
+      const pass = password();
+      const h = host();
+      const p = port();
+      const db = database();
+
+      let url = "redis://";
+      if (user || pass) {
+        if (user) {
+          url += user;
+        }
+        if (pass) {
+          url += `:${pass}`;
+        }
+        url += "@";
+      }
+      url += h;
+      if (p && p !== 6379) {
+        url += `:${p}`;
+      }
+      if (db && db !== "0") {
+        url += `/${db}`;
+      }
+      return url;
     }
 
     const protocol = type === "mysql" ? "mysql" : "postgres";
@@ -186,6 +234,8 @@ export function ConnectionForm(props: Props) {
       setPort(5432);
     } else if (type === "mysql") {
       setPort(3306);
+    } else if (type === "redis") {
+      setPort(6379);
     }
   };
 
@@ -231,6 +281,7 @@ export function ConnectionForm(props: Props) {
   };
 
   const isServerBased = () => dbType() !== "sqlite";
+  const isRedis = () => dbType() === "redis";
 
   return (
     <div class="modal-overlay" onClick={() => props.onClose()}>
@@ -289,6 +340,15 @@ export function ConnectionForm(props: Props) {
                   onChange={() => handleDbTypeChange("sqlite")}
                 />
                 SQLite
+              </label>
+              <label>
+                <input
+                  type="radio"
+                  name="dbType"
+                  checked={dbType() === "redis"}
+                  onChange={() => handleDbTypeChange("redis")}
+                />
+                Redis
               </label>
             </div>
           </div>
@@ -392,16 +452,18 @@ export function ConnectionForm(props: Props) {
               </div>
             </div>
 
-            <div class="form-group">
-              <label for="database">Database</label>
-              <input
-                id="database"
-                type="text"
-                value={database()}
-                onInput={(e) => setDatabase(e.currentTarget.value)}
-                placeholder="Leave empty to browse all"
-              />
-            </div>
+            <Show when={!isRedis()}>
+              <div class="form-group">
+                <label for="database">Database</label>
+                <input
+                  id="database"
+                  type="text"
+                  value={database()}
+                  onInput={(e) => setDatabase(e.currentTarget.value)}
+                  placeholder="Leave empty to browse all"
+                />
+              </div>
+            </Show>
           </Show>
 
           {error() && <div class="error">{error()}</div>}

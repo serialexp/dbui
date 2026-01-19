@@ -1,13 +1,16 @@
 // ABOUTME: SQL query editor using CodeMirror.
 // ABOUTME: Provides syntax highlighting and query execution.
 
-import { onMount, onCleanup, createEffect } from "solid-js";
+import { onMount, onCleanup, createEffect, Show } from "solid-js";
 import { EditorState, StateEffect, StateField, Prec } from "@codemirror/state";
 import { EditorView, keymap, Decoration, DecorationSet } from "@codemirror/view";
 import { basicSetup } from "codemirror";
 import { sql, PostgreSQL, MySQL, SQLite } from "@codemirror/lang-sql";
 import { oneDark } from "@codemirror/theme-one-dark";
 import type { DatabaseType } from "../lib/types";
+import { Icon } from "./Icon";
+import caretLeftSvg from "@phosphor-icons/core/assets/regular/caret-left.svg?raw";
+import caretRightSvg from "@phosphor-icons/core/assets/regular/caret-right.svg?raw";
 
 interface Props {
   value: string;
@@ -15,6 +18,10 @@ interface Props {
   onExecute: (query: string) => void;
   dbType: DatabaseType | null;
   disabled: boolean;
+  canGoBack?: boolean;
+  canGoForward?: boolean;
+  onBack?: () => void;
+  onForward?: () => void;
 }
 
 export function QueryEditor(props: Props) {
@@ -230,6 +237,7 @@ export function QueryEditor(props: Props) {
             updateQueryHighlight(update.view);
           }
         }),
+        EditorView.lineWrapping,
         EditorView.theme({
           "&": {
             height: "200px",
@@ -273,7 +281,27 @@ export function QueryEditor(props: Props) {
   return (
     <div class="query-editor">
       <div class="editor-header">
-        <span>Query</span>
+        <div class="editor-header-left">
+          <Show when={props.onBack && props.onForward}>
+            <button
+              class="nav-btn"
+              onClick={props.onBack}
+              disabled={!props.canGoBack}
+              title="Previous query"
+            >
+              <Icon svg={caretLeftSvg} size={14} />
+            </button>
+            <button
+              class="nav-btn"
+              onClick={props.onForward}
+              disabled={!props.canGoForward}
+              title="Next query"
+            >
+              <Icon svg={caretRightSvg} size={14} />
+            </button>
+          </Show>
+          <span>Query</span>
+        </div>
         <span class="shortcut-hint">Cmd/Ctrl+Enter to run</span>
       </div>
       <div ref={containerRef} class="editor-container" />

@@ -3,6 +3,8 @@
 
 import { For, Show } from "solid-js";
 import type { QueryResult, CellSelection } from "../lib/types";
+import { Icon } from "./Icon";
+import arrowRightSvg from "@phosphor-icons/core/assets/regular/arrow-right.svg?raw";
 
 interface Props {
   result: QueryResult | null;
@@ -10,6 +12,7 @@ interface Props {
   loading: boolean;
   selectedCell: CellSelection | null;
   onCellSelect: (selection: CellSelection | null) => void;
+  onRowDoubleClick?: (row: unknown[], columns: string[]) => void;
 }
 
 export function ResultsTable(props: Props) {
@@ -32,6 +35,12 @@ export function ResultsTable(props: Props) {
 
   const isLimited = () => {
     return props.result && props.result.rows.length > MAX_DISPLAY_ROWS;
+  };
+
+  const isDrillable = () => {
+    if (!props.onRowDoubleClick || !props.result) return false;
+    const cols = props.result.columns;
+    return cols.length >= 2 && cols[0] === "key" && cols[1] === "type";
   };
 
   return (
@@ -69,12 +78,21 @@ export function ResultsTable(props: Props) {
                     <For each={props.result!.columns}>
                       {(col) => <th>{col}</th>}
                     </For>
+                    <Show when={isDrillable()}>
+                      <th class="action-column"></th>
+                    </Show>
                   </tr>
                 </thead>
                 <tbody>
                   <For each={displayRows()}>
                     {(row, getRowIndex) => (
-                      <tr>
+                      <tr
+                        onDblClick={() => {
+                          if (props.onRowDoubleClick && props.result?.columns) {
+                            props.onRowDoubleClick(row, props.result.columns);
+                          }
+                        }}
+                      >
                         <For each={row}>
                           {(cell, getCellIndex) => {
                             const rowIdx = getRowIndex();
@@ -108,6 +126,21 @@ export function ResultsTable(props: Props) {
                             );
                           }}
                         </For>
+                        <Show when={isDrillable()}>
+                          <td class="action-cell">
+                            <button
+                              class="drill-button"
+                              onClick={() => {
+                                if (props.onRowDoubleClick && props.result?.columns) {
+                                  props.onRowDoubleClick(row, props.result.columns);
+                                }
+                              }}
+                              title="View value"
+                            >
+                              <Icon svg={arrowRightSvg} size={14} />
+                            </button>
+                          </td>
+                        </Show>
                       </tr>
                     )}
                   </For>

@@ -3,7 +3,7 @@
 
 import { createSignal, Show, onMount, onCleanup } from "solid-js";
 import type { DatabaseType, QueryResult, CellSelection, MetadataView, FunctionInfo } from "./lib/types";
-import { executeQuery, listConnections, getFunctionDefinition, saveQueryHistory } from "./lib/tauri";
+import { executeQuery, listConnections, getFunctionDefinition, saveQueryHistory, getQueryHistory } from "./lib/tauri";
 import { Sidebar } from "./components/Sidebar";
 import { QueryEditor } from "./components/QueryEditor";
 import { ResultsTable } from "./components/ResultsTable";
@@ -23,6 +23,8 @@ function App() {
   const [activeTable, setActiveTable] = createSignal<string | null>(null);
   const [activeViewType, setActiveViewType] = createSignal<string | null>(null);
   const [query, setQuery] = createSignal("SELECT 1;");
+  const [queryNavHistory, setQueryNavHistory] = createSignal<{ id: string; query: string }[]>([]);
+  const [queryNavIndex, setQueryNavIndex] = createSignal(-1);
   const [result, setResult] = createSignal<QueryResult | null>(null);
   const [error, setError] = createSignal<string | null>(null);
   const [loading, setLoading] = createSignal(false);
@@ -31,6 +33,7 @@ function App() {
   const [selectedMetadataRow, setSelectedMetadataRow] = createSignal<number | null>(null);
   const [functionInfo, setFunctionInfo] = createSignal<FunctionInfo | null>(null);
   const [showHistory, setShowHistory] = createSignal(false);
+  const [categoryColor, setCategoryColor] = createSignal<string | null>(null);
 
   const handleConnectionChange = async (id: string | null) => {
     setActiveConnectionId(id);
@@ -55,11 +58,61 @@ function App() {
     setMetadataView(null);
   };
 
-  const handleDatabaseSwitch = (database: string, schema: string | null) => {
+  const handleDatabaseSwitch = async (database: string, schema: string | null) => {
     setActiveDatabase(database);
     setActiveSchema(schema);
     setActiveTable(null);
     setActiveViewType(null);
+
+    // Load query history for this connection/database
+    const connId = activeConnectionId();
+    if (connId) {
+      try {
+        const history = await getQueryHistory({
+          connection_id: connId,
+          database: database,
+          limit: 50,
+        });
+        if (history.length > 0) {
+          // History comes newest-first, reverse to get chronological order
+          const chronological = [...history].reverse();
+          const navEntries = chronological.map(entry => ({ id: entry.id, query: entry.query }));
+          setQueryNavHistory(navEntries);
+          setQueryNavIndex(navEntries.length - 1);
+          setQuery(history[0].query);
+        }
+      } catch (err) {
+        console.error("Failed to load query history:", err);
+      }
+    }
+  };
+
+  const pushQueryToNavHistory = (id: string, queryText: string) => {
+    const history = queryNavHistory();
+    const index = queryNavIndex();
+    // Don't add if same as current
+    if (index >= 0 && history[index]?.id === id) return;
+    // Truncate forward history and add new entry
+    const newHistory = [...history.slice(0, index + 1), { id, query: queryText }];
+    setQueryNavHistory(newHistory);
+    setQueryNavIndex(newHistory.length - 1);
+  };
+
+  const canGoBack = () => queryNavIndex() > 0;
+  const canGoForward = () => queryNavIndex() < queryNavHistory().length - 1;
+
+  const handleQueryBack = () => {
+    if (!canGoBack()) return;
+    const newIndex = queryNavIndex() - 1;
+    setQueryNavIndex(newIndex);
+    setQuery(queryNavHistory()[newIndex].query);
+  };
+
+  const handleQueryForward = () => {
+    if (!canGoForward()) return;
+    const newIndex = queryNavIndex() + 1;
+    setQueryNavIndex(newIndex);
+    setQuery(queryNavHistory()[newIndex].query);
   };
 
   const handleTableSelect = async (database: string, schema: string, table: string) => {
@@ -133,8 +186,11 @@ function App() {
       const [res, backendTime] = await executeQuery(connId, queryToExecute);
       setResult(res);
 
+      const historyId = crypto.randomUUID();
+      pushQueryToNavHistory(historyId, queryToExecute);
+
       saveQueryHistory({
-        id: crypto.randomUUID(),
+        id: historyId,
         connection_id: connId,
         database: db,
         schema: sch,
@@ -150,8 +206,11 @@ function App() {
       const errorMsg = err instanceof Error ? err.message : String(err);
       setError(errorMsg);
 
+      const historyId = crypto.randomUUID();
+      pushQueryToNavHistory(historyId, queryToExecute);
+
       saveQueryHistory({
-        id: crypto.randomUUID(),
+        id: historyId,
         connection_id: connId,
         database: db,
         schema: sch,
@@ -168,6 +227,28 @@ function App() {
     }
   };
 
+  const handleRowDoubleClick = (row: unknown[], columns: string[]) => {
+    // Handle Redis BROWSE results - columns are "key" and "type"
+    if (activeDbType() === "redis" && columns.length >= 2 && columns[0] === "key" && columns[1] === "type") {
+      const key = String(row[0]);
+      const type = String(row[1]);
+
+      // Generate appropriate command based on type
+      const commands: Record<string, string> = {
+        string: `GET "${key}"`,
+        list: `LRANGE "${key}" 0 -1`,
+        hash: `HGETALL "${key}"`,
+        set: `SMEMBERS "${key}"`,
+        zset: `ZRANGE "${key}" 0 -1 WITHSCORES`,
+        stream: `XRANGE "${key}" - + COUNT 100`,
+      };
+
+      const command = commands[type] || `TYPE "${key}"`;
+      setQuery(command);
+      handleExecute(command);
+    }
+  };
+
   onMount(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if ((e.ctrlKey || e.metaKey) && e.key === 'h') {
@@ -181,6 +262,14 @@ function App() {
 
   return (
     <div class="app">
+      <Show when={categoryColor()}>
+        <div
+          class="category-overlay"
+          style={{
+            "box-shadow": `inset 0 0 30px ${categoryColor()}40, inset 0 0 15px ${categoryColor()}20`,
+          }}
+        />
+      </Show>
       <Sidebar
         activeConnectionId={activeConnectionId()}
         onConnectionChange={handleConnectionChange}
@@ -189,14 +278,17 @@ function App() {
         onQueryGenerate={handleQueryGenerate}
         onMetadataSelect={handleMetadataSelect}
         onFunctionSelect={handleFunctionSelect}
+        onCategoryColorChange={setCategoryColor}
       />
       <main class="main-content">
         <ConnectionPath
+          connectionId={activeConnectionId()}
           connectionName={activeConnectionName()}
           database={activeDatabase()}
           schema={activeSchema()}
           table={activeTable()}
           viewType={activeViewType()}
+          onHistoryClick={() => setShowHistory(true)}
         />
 
         <Show when={!metadataView() && !functionInfo()}>
@@ -206,6 +298,10 @@ function App() {
             onExecute={handleExecute}
             dbType={activeDbType()}
             disabled={!activeConnectionId() || loading()}
+            canGoBack={canGoBack()}
+            canGoForward={canGoForward()}
+            onBack={handleQueryBack}
+            onForward={handleQueryForward}
           />
         </Show>
 
@@ -234,6 +330,7 @@ function App() {
                 loading={loading()}
                 selectedCell={selectedCell()}
                 onCellSelect={setSelectedCell}
+                onRowDoubleClick={handleRowDoubleClick}
               />
             </div>
             <CellInspector

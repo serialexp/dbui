@@ -1,7 +1,7 @@
 // ABOUTME: Left sidebar containing connections and database object tree.
 // ABOUTME: Provides connection management and database navigation.
 
-import { createSignal, Show, onMount } from "solid-js";
+import { createSignal, Show, onMount, createEffect } from "solid-js";
 import { Icon } from "./Icon";
 import { confirm } from "@tauri-apps/plugin-dialog";
 import type { ConnectionConfig, Category, MetadataView } from "../lib/types";
@@ -23,6 +23,7 @@ interface Props {
   onQueryGenerate: (query: string) => void;
   onMetadataSelect: (view: MetadataView) => void;
   onFunctionSelect: (connectionId: string, database: string, schema: string, functionName: string) => void;
+  onCategoryColorChange?: (color: string | null) => void;
 }
 
 export function Sidebar(props: Props) {
@@ -58,6 +59,26 @@ export function Sidebar(props: Props) {
 
   onMount(() => {
     loadAll();
+  });
+
+  // Report category color changes to parent
+  createEffect(() => {
+    if (!props.onCategoryColorChange) return;
+
+    const connId = props.activeConnectionId;
+    if (!connId) {
+      props.onCategoryColorChange(null);
+      return;
+    }
+
+    const conn = connections().find(c => c.id === connId);
+    if (!conn?.category_id) {
+      props.onCategoryColorChange(null);
+      return;
+    }
+
+    const category = categories().find(c => c.id === conn.category_id);
+    props.onCategoryColorChange(category?.color || null);
   });
 
   const handleDelete = async (id: string, e: Event) => {

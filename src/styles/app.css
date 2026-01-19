@@ -44,6 +44,14 @@ body {
 .app {
   display: flex;
   height: 100%;
+  position: relative;
+}
+
+.category-overlay {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 9999;
 }
 
 /* Sidebar */
@@ -235,12 +243,12 @@ body {
   opacity: 1;
 }
 
-.disconnect-btn:hover,
 .delete-btn:hover {
   background: var(--error-color);
   color: white;
 }
 
+.disconnect-btn:hover,
 .edit-btn:hover {
   background: var(--accent-color);
   color: white;
@@ -269,6 +277,36 @@ body {
   background: var(--bg-secondary);
   border-bottom: 1px solid var(--border-color);
   font-weight: 500;
+}
+
+.editor-header-left {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.nav-btn {
+  width: 24px;
+  height: 24px;
+  border: none;
+  background: transparent;
+  color: var(--text-secondary);
+  cursor: pointer;
+  border-radius: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+}
+
+.nav-btn:hover:not(:disabled) {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+
+.nav-btn:disabled {
+  opacity: 0.3;
+  cursor: not-allowed;
 }
 
 .shortcut-hint {
@@ -420,6 +458,39 @@ tr:hover td {
 
 tr:hover td.selected-cell {
   background: rgba(0, 120, 212, 0.3) !important;
+}
+
+th.action-column,
+td.action-cell {
+  width: 32px;
+  padding: 4px 8px;
+  text-align: center;
+}
+
+.drill-button {
+  width: 24px;
+  height: 24px;
+  border: none;
+  background: transparent;
+  color: var(--text-secondary);
+  cursor: pointer;
+  border-radius: 4px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  opacity: 0.5;
+  transition: opacity 0.15s, background 0.15s;
+}
+
+.drill-button:hover {
+  background: var(--accent-color);
+  color: white;
+  opacity: 1;
+}
+
+tr:hover .drill-button {
+  opacity: 1;
 }
 
 .results-content .loading,
@@ -669,6 +740,27 @@ tr:hover td.selected-cell {
 }
 
 .close-button:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+
+.copy-button {
+  width: 20px;
+  height: 20px;
+  border: none;
+  background: transparent;
+  color: var(--text-secondary);
+  cursor: pointer;
+  border-radius: 3px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  margin-left: auto;
+  flex-shrink: 0;
+}
+
+.copy-button:hover {
   background: var(--bg-hover);
   color: var(--text-primary);
 }
@@ -952,6 +1044,32 @@ tr:hover td.selected-cell {
 .path-separator {
   color: var(--text-secondary);
   opacity: 0.5;
+}
+
+.path-spacer {
+  flex: 1;
+}
+
+.path-history {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--text-secondary);
+  background: none;
+  border: none;
+  padding: 4px 8px;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.path-history:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+
+.path-history-count {
+  font-size: 12px;
+  font-weight: 500;
 }
 
 /* Query History Modal */

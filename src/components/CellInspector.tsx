@@ -5,6 +5,8 @@ import { createSignal, Show } from "solid-js";
 import type { CellSelection } from "../lib/types";
 import { Icon } from "./Icon";
 import xSvg from "@phosphor-icons/core/assets/regular/x.svg?raw";
+import copySvg from "@phosphor-icons/core/assets/regular/copy.svg?raw";
+import checkSvg from "@phosphor-icons/core/assets/regular/check.svg?raw";
 
 interface Props {
   selection: CellSelection | null;
@@ -57,6 +59,7 @@ function formatValue(value: unknown, mode: ViewMode): string {
 
 export function CellInspector(props: Props) {
   const [viewMode, setViewMode] = createSignal<ViewMode>("raw");
+  const [copied, setCopied] = createSignal(false);
 
   const formattedValue = () => {
     if (!props.selection) return "";
@@ -65,6 +68,17 @@ export function CellInspector(props: Props) {
 
   const isNull = () =>
     props.selection?.value === null || props.selection?.value === undefined;
+
+  const copyToClipboard = async () => {
+    const value = formattedValue();
+    try {
+      await navigator.clipboard.writeText(value);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1500);
+    } catch (err) {
+      console.error("Failed to copy to clipboard:", err);
+    }
+  };
 
   return (
     <Show when={props.selection}>
@@ -77,6 +91,15 @@ export function CellInspector(props: Props) {
               {props.selection?.columnName}"
             </div>
           </div>
+          <button
+            class="copy-button"
+            onClick={copyToClipboard}
+            title={copied() ? "Copied!" : "Copy to clipboard"}
+          >
+            <Show when={copied()} fallback={<Icon svg={copySvg} />}>
+              <Icon svg={checkSvg} />
+            </Show>
+          </button>
           <button class="close-button" onClick={props.onClose} title="Close">
             <Icon svg={xSvg} />
           </button>

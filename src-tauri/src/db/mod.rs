@@ -1,8 +1,9 @@
 // ABOUTME: Database connection management and query execution.
-// ABOUTME: Supports PostgreSQL, MySQL, and SQLite with runtime driver selection.
+// ABOUTME: Supports PostgreSQL, MySQL, SQLite, and Redis with runtime driver selection.
 
 pub mod mysql;
 pub mod postgres;
+pub mod redis_db;
 pub mod sqlite;
 
 use crate::storage::{ConnectionConfig, DatabaseType};
@@ -60,6 +61,7 @@ pub enum ConnectionPool {
     Postgres(sqlx::PgPool),
     Mysql(sqlx::MySqlPool),
     Sqlite(sqlx::SqlitePool),
+    Redis(redis::aio::ConnectionManager),
 }
 
 pub struct ConnectionManager {
@@ -113,6 +115,16 @@ impl ConnectionManager {
                     .map_err(|e| format!("Failed to connect to SQLite: {}", e))?;
                 ConnectionPool::Sqlite(pool)
             }
+            DatabaseType::Redis => {
+                let manager = redis_db::connect(
+                    &config.host,
+                    config.port,
+                    &config.username,
+                    &config.password,
+                )
+                .await?;
+                ConnectionPool::Redis(manager)
+            }
         };
 
         let mut pools = self.pools.write().await;
@@ -129,7 +141,15 @@ impl ConnectionManager {
     }
 
     pub async fn switch_database(&self, config: &ConnectionConfig, database: &str) -> Result<(), String> {
-        // Disconnect existing connection if any
+        // For Redis, switch database using SELECT command instead of reconnecting
+        if matches!(config.db_type, DatabaseType::Redis) {
+            let pool = self.get_pool(&config.id).await?;
+            if let ConnectionPool::Redis(c) = pool.as_ref() {
+                return redis_db::switch_database(&mut c.clone(), database).await;
+            }
+        }
+
+        // For SQL databases, disconnect and reconnect with new database
         let _ = self.disconnect(&config.id).await;
 
         // Create new config with the specified database
@@ -155,6 +175,7 @@ impl ConnectionManager {
             ConnectionPool::Postgres(p) => postgres::list_databases(p).await,
             ConnectionPool::Mysql(p) => mysql::list_databases(p).await,
             ConnectionPool::Sqlite(p) => sqlite::list_databases(p).await,
+            ConnectionPool::Redis(c) => redis_db::list_databases(&mut c.clone()).await,
         }
     }
 
@@ -168,6 +189,7 @@ impl ConnectionManager {
             ConnectionPool::Postgres(p) => postgres::list_schemas(p, database).await,
             ConnectionPool::Mysql(p) => mysql::list_schemas(p, database).await,
             ConnectionPool::Sqlite(p) => sqlite::list_schemas(p, database).await,
+            ConnectionPool::Redis(c) => redis_db::list_schemas(&mut c.clone(), database).await,
         }
     }
 
@@ -182,6 +204,7 @@ impl ConnectionManager {
             ConnectionPool::Postgres(p) => postgres::list_tables(p, database, schema).await,
             ConnectionPool::Mysql(p) => mysql::list_tables(p, database, schema).await,
             ConnectionPool::Sqlite(p) => sqlite::list_tables(p, database, schema).await,
+            ConnectionPool::Redis(c) => redis_db::list_tables(&mut c.clone(), database, schema).await,
         }
     }
 
@@ -196,6 +219,7 @@ impl ConnectionManager {
             ConnectionPool::Postgres(p) => postgres::list_views(p, database, schema).await,
             ConnectionPool::Mysql(p) => mysql::list_views(p, database, schema).await,
             ConnectionPool::Sqlite(p) => sqlite::list_views(p, database, schema).await,
+            ConnectionPool::Redis(c) => redis_db::list_views(&mut c.clone(), database, schema).await,
         }
     }
 
@@ -210,6 +234,7 @@ impl ConnectionManager {
             ConnectionPool::Postgres(p) => postgres::list_functions(p, database, schema).await,
             ConnectionPool::Mysql(p) => mysql::list_functions(p, database, schema).await,
             ConnectionPool::Sqlite(p) => sqlite::list_functions(p, database, schema).await,
+            ConnectionPool::Redis(c) => redis_db::list_functions(&mut c.clone(), database, schema).await,
         }
     }
 
@@ -231,6 +256,9 @@ impl ConnectionManager {
             ConnectionPool::Sqlite(p) => {
                 sqlite::get_function_definition(p, database, schema, function_name).await
             }
+            ConnectionPool::Redis(c) => {
+                redis_db::get_function_definition(&mut c.clone(), database, schema, function_name).await
+            }
         }
     }
 
@@ -246,6 +274,7 @@ impl ConnectionManager {
             ConnectionPool::Postgres(p) => postgres::list_columns(p, database, schema, table).await,
             ConnectionPool::Mysql(p) => mysql::list_columns(p, database, schema, table).await,
             ConnectionPool::Sqlite(p) => sqlite::list_columns(p, database, schema, table).await,
+            ConnectionPool::Redis(c) => redis_db::list_columns(&mut c.clone(), database, schema, table).await,
         }
     }
 
@@ -261,6 +290,7 @@ impl ConnectionManager {
             ConnectionPool::Postgres(p) => postgres::list_indexes(p, database, schema, table).await,
             ConnectionPool::Mysql(p) => mysql::list_indexes(p, database, schema, table).await,
             ConnectionPool::Sqlite(p) => sqlite::list_indexes(p, database, schema, table).await,
+            ConnectionPool::Redis(c) => redis_db::list_indexes(&mut c.clone(), database, schema, table).await,
         }
     }
 
@@ -278,6 +308,7 @@ impl ConnectionManager {
             }
             ConnectionPool::Mysql(p) => mysql::list_constraints(p, database, schema, table).await,
             ConnectionPool::Sqlite(p) => sqlite::list_constraints(p, database, schema, table).await,
+            ConnectionPool::Redis(c) => redis_db::list_constraints(&mut c.clone(), database, schema, table).await,
         }
     }
 
@@ -291,6 +322,7 @@ impl ConnectionManager {
             ConnectionPool::Postgres(p) => execute_query_pg(p, query).await,
             ConnectionPool::Mysql(p) => execute_query_mysql(p, query).await,
             ConnectionPool::Sqlite(p) => execute_query_sqlite(p, query).await,
+            ConnectionPool::Redis(c) => redis_db::execute_query(&mut c.clone(), query).await,
         }
     }
 }
