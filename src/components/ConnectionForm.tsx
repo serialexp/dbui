@@ -1,11 +1,13 @@
 // ABOUTME: Modal form for creating and editing database connections.
 // ABOUTME: Supports PostgreSQL, MySQL, and SQLite connection configuration.
 
-import { createSignal, createEffect, Show } from "solid-js";
-import type { DatabaseType, SaveConnectionInput } from "../lib/types";
-import { saveConnection } from "../lib/tauri";
+import { createSignal, createEffect, Show, For, onMount, onCleanup } from "solid-js";
+import type { DatabaseType, SaveConnectionInput, UpdateConnectionInput, Category, ConnectionConfig } from "../lib/types";
+import { saveConnection, updateConnection } from "../lib/tauri";
 
 interface Props {
+  categories: Category[];
+  connection?: ConnectionConfig;
   onClose: () => void;
   onSaved: () => void;
 }
@@ -20,10 +22,41 @@ export function ConnectionForm(props: Props) {
   const [database, setDatabase] = createSignal("");
   const [filePath, setFilePath] = createSignal("");
   const [connectionUrl, setConnectionUrl] = createSignal("");
+  const [categoryId, setCategoryId] = createSignal<string | null>(null);
   const [error, setError] = createSignal<string | null>(null);
   const [saving, setSaving] = createSignal(false);
   const [updatingFromUrl, setUpdatingFromUrl] = createSignal(false);
   const [updatingFromFields, setUpdatingFromFields] = createSignal(false);
+
+  const isEditing = () => !!props.connection;
+
+  onMount(() => {
+    if (props.connection) {
+      const conn = props.connection;
+      setName(conn.name);
+      setDbType(conn.db_type);
+      setCategoryId(conn.category_id);
+
+      if (conn.db_type === "sqlite") {
+        setFilePath(conn.host);
+      } else {
+        setHost(conn.host);
+        setPort(conn.port);
+        setUsername(conn.username);
+        setPassword(conn.password);
+        setDatabase(conn.database || "");
+      }
+    }
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        props.onClose();
+      }
+    };
+
+    document.addEventListener("keydown", handleKeyDown);
+    onCleanup(() => document.removeEventListener("keydown", handleKeyDown));
+  });
 
   const parseConnectionUrl = (url: string) => {
     if (!url.trim()) return;
@@ -162,16 +195,32 @@ export function ConnectionForm(props: Props) {
     setSaving(true);
 
     try {
-      const input: SaveConnectionInput = {
-        name: name(),
-        db_type: dbType(),
-        host: dbType() === "sqlite" ? filePath() : host(),
-        port: dbType() === "sqlite" ? 0 : port(),
-        username: dbType() === "sqlite" ? "" : username(),
-        password: dbType() === "sqlite" ? "" : password(),
-        database: dbType() === "sqlite" ? null : database() || null,
-      };
-      await saveConnection(input);
+      if (isEditing()) {
+        const input: UpdateConnectionInput = {
+          id: props.connection!.id,
+          name: name(),
+          db_type: dbType(),
+          host: dbType() === "sqlite" ? filePath() : host(),
+          port: dbType() === "sqlite" ? 0 : port(),
+          username: dbType() === "sqlite" ? "" : username(),
+          password: dbType() === "sqlite" ? "" : password(),
+          database: dbType() === "sqlite" ? null : database() || null,
+          category_id: categoryId(),
+        };
+        await updateConnection(input);
+      } else {
+        const input: SaveConnectionInput = {
+          name: name(),
+          db_type: dbType(),
+          host: dbType() === "sqlite" ? filePath() : host(),
+          port: dbType() === "sqlite" ? 0 : port(),
+          username: dbType() === "sqlite" ? "" : username(),
+          password: dbType() === "sqlite" ? "" : password(),
+          database: dbType() === "sqlite" ? null : database() || null,
+          category_id: categoryId(),
+        };
+        await saveConnection(input);
+      }
       props.onSaved();
       props.onClose();
     } catch (err) {
@@ -186,7 +235,7 @@ export function ConnectionForm(props: Props) {
   return (
     <div class="modal-overlay" onClick={() => props.onClose()}>
       <div class="modal" onClick={(e) => e.stopPropagation()}>
-        <h2>New Connection</h2>
+        <h2>{isEditing() ? "Edit Connection" : "New Connection"}</h2>
         <form onSubmit={handleSubmit}>
           <div class="form-group">
             <label for="name">Connection Name</label>
@@ -242,6 +291,45 @@ export function ConnectionForm(props: Props) {
                 SQLite
               </label>
             </div>
+          </div>
+
+          <div class="form-group">
+            <label for="category">Category</label>
+            <Show
+              when={props.categories.length > 0}
+              fallback={
+                <div class="category-hint">
+                  No categories yet. Create categories from the sidebar settings to organize your connections.
+                </div>
+              }
+            >
+              <div class="category-select-wrapper">
+                <select
+                  id="category"
+                  class="category-select"
+                  value={categoryId() || ""}
+                  onChange={(e) =>
+                    setCategoryId(e.currentTarget.value || null)
+                  }
+                >
+                  <option value="">None</option>
+                  <For each={props.categories}>
+                    {(cat) => <option value={cat.id}>{cat.name}</option>}
+                  </For>
+                </select>
+                <Show when={categoryId()}>
+                  {(() => {
+                    const cat = props.categories.find((c) => c.id === categoryId());
+                    return cat ? (
+                      <div
+                        class="category-color-indicator"
+                        style={{ "background-color": cat.color }}
+                      />
+                    ) : null;
+                  })()}
+                </Show>
+              </div>
+            </Show>
           </div>
 
           <Show when={dbType() === "sqlite"}>

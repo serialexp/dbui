@@ -1,7 +1,7 @@
 // ABOUTME: Query history modal with search and filtering.
 // ABOUTME: Displays executed queries with metadata and allows re-use.
 
-import { createSignal, createEffect, For, Show, onMount } from "solid-js";
+import { createSignal, createEffect, For, Show, onMount, onCleanup } from "solid-js";
 import type { QueryHistoryEntry, QueryHistoryFilter } from "../lib/types";
 import { getQueryHistory, searchQueryHistory, deleteQueryHistory } from "../lib/tauri";
 import { Icon } from "./Icon";
@@ -138,6 +138,19 @@ export function QueryHistory(props: Props) {
 
   onMount(() => {
     searchInputRef?.focus();
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        if (selectedEntry()) {
+          setSelectedEntry(null);
+        } else {
+          props.onClose();
+        }
+      }
+    };
+
+    document.addEventListener("keydown", handleKeyDown);
+    onCleanup(() => document.removeEventListener("keydown", handleKeyDown));
   });
 
   return (

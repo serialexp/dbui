@@ -3,13 +3,14 @@
 
 import { createSignal, createEffect, For, Show } from "solid-js";
 import { Icon } from "./Icon";
-import type { TreeNode, ConnectionConfig, MetadataView } from "../lib/types";
+import type { TreeNode, ConnectionConfig, Category, MetadataView } from "../lib/types";
 
 // Import Phosphor icons as raw SVG strings
 import caretRightSvg from "@phosphor-icons/core/assets/regular/caret-right.svg?raw";
 import caretDownSvg from "@phosphor-icons/core/assets/regular/caret-down.svg?raw";
 import xSvg from "@phosphor-icons/core/assets/regular/x.svg?raw";
 import trashSvg from "@phosphor-icons/core/assets/regular/trash.svg?raw";
+import pencilSvg from "@phosphor-icons/core/assets/regular/pencil.svg?raw";
 import plugsSvg from "@phosphor-icons/core/assets/regular/plugs.svg?raw";
 import plugsConnectedSvg from "@phosphor-icons/core/assets/regular/plugs-connected.svg?raw";
 import databaseSvg from "@phosphor-icons/core/assets/regular/database.svg?raw";
@@ -22,6 +23,7 @@ import columnsSvg from "@phosphor-icons/core/assets/regular/columns.svg?raw";
 import lightningSvg from "@phosphor-icons/core/assets/regular/lightning.svg?raw";
 import lockSvg from "@phosphor-icons/core/assets/regular/lock.svg?raw";
 import functionSvg from "@phosphor-icons/core/assets/regular/function.svg?raw";
+import folderSvg from "@phosphor-icons/core/assets/regular/folder.svg?raw";
 import {
   connect,
   disconnect,
@@ -38,11 +40,13 @@ import {
 
 interface Props {
   connections: ConnectionConfig[];
+  categories: Category[];
   activeConnectionId: string | null;
   onConnectionChange: (id: string | null) => void;
   onDatabaseSwitch: (database: string, schema: string | null) => void;
   onTableSelect: (database: string, schema: string, table: string) => void;
   onQueryGenerate: (query: string) => void;
+  onEdit: (connection: ConnectionConfig) => void;
   onDelete: (id: string, e: Event) => void;
   onMetadataSelect: (view: MetadataView) => void;
   onFunctionSelect: (connectionId: string, database: string, schema: string, functionName: string) => void;
@@ -53,15 +57,59 @@ export function ObjectTree(props: Props) {
   const [error, setError] = createSignal<string | null>(null);
 
   const buildConnectionNodes = () => {
-    return props.connections.map((conn) => ({
-      id: conn.id,
-      label: conn.name,
-      type: "connection" as const,
-      children: [],
-      expanded: false,
-      loading: false,
-      metadata: { config: conn },
-    }));
+    const categoryMap = new Map<string, Category>();
+    for (const cat of props.categories) {
+      categoryMap.set(cat.id, cat);
+    }
+
+    const categorizedConnections = new Map<string, ConnectionConfig[]>();
+    const uncategorizedConnections: ConnectionConfig[] = [];
+
+    for (const conn of props.connections) {
+      if (conn.category_id && categoryMap.has(conn.category_id)) {
+        const existing = categorizedConnections.get(conn.category_id) || [];
+        existing.push(conn);
+        categorizedConnections.set(conn.category_id, existing);
+      } else {
+        uncategorizedConnections.push(conn);
+      }
+    }
+
+    const nodes: TreeNode[] = [];
+
+    for (const category of props.categories) {
+      const conns = categorizedConnections.get(category.id) || [];
+      nodes.push({
+        id: `category:${category.id}`,
+        label: category.name,
+        type: "category" as const,
+        children: conns.map((conn) => ({
+          id: conn.id,
+          label: conn.name,
+          type: "connection" as const,
+          children: [],
+          expanded: false,
+          loading: false,
+          metadata: { config: conn },
+        })),
+        expanded: true,
+        metadata: { category },
+      });
+    }
+
+    for (const conn of uncategorizedConnections) {
+      nodes.push({
+        id: conn.id,
+        label: conn.name,
+        type: "connection" as const,
+        children: [],
+        expanded: false,
+        loading: false,
+        metadata: { config: conn },
+      });
+    }
+
+    return nodes;
   };
 
   const updateNodes = () => {
@@ -114,6 +162,10 @@ export function ObjectTree(props: Props) {
       let children: TreeNode[] = [];
 
       switch (node.type) {
+        case "category": {
+          updateNode(node.id, { expanded: !node.expanded, loading: false });
+          return;
+        }
         case "connection": {
           const config = node.metadata?.config as ConnectionConfig;
           await connect(config.id);
@@ -327,11 +379,24 @@ export function ObjectTree(props: Props) {
     }
   };
 
+  const getConnectionIcon = (dbType: string) => {
+    const iconMap: Record<string, string> = {
+      postgres: "/icons/postgresql.svg",
+      mysql: "/icons/mysql.svg",
+      sqlite: "/icons/sqlite.svg",
+    };
+    return iconMap[dbType] || "/icons/postgresql.svg";
+  };
+
   const getNodeIcon = (node: TreeNode) => {
     const iconSize = 14;
     switch (node.type) {
-      case "connection":
-        return <Icon svg={node.expanded ? plugsConnectedSvg : plugsSvg} size={iconSize} />;
+      case "category":
+        return <Icon svg={folderSvg} size={iconSize} />;
+      case "connection": {
+        const config = node.metadata?.config as ConnectionConfig;
+        return <img src={getConnectionIcon(config.db_type)} width={iconSize} height={iconSize} alt={config.db_type} />;
+      }
       case "database":
         return <Icon svg={databaseSvg} size={iconSize} />;
       case "schema":
@@ -372,15 +437,28 @@ export function ObjectTree(props: Props) {
   const renderNode = (node: TreeNode, depth: number = 0) => {
     const hasChildren =
       node.children && node.children.length > 0 ||
-      ["connection", "database", "schema", "tables", "views", "functions", "table"].includes(node.type);
+      ["category", "connection", "database", "schema", "tables", "views", "functions", "table"].includes(node.type);
     const isLeaf = ["view", "function", "data", "columns", "indexes", "constraints", "empty"].includes(node.type);
     const isClickable = !isLeaf || ["data", "columns", "indexes", "constraints", "function"].includes(node.type);
+
+    const getCategoryStyle = () => {
+      if (node.type === "category") {
+        const category = node.metadata?.category as Category;
+        if (category) {
+          return {
+            "background-color": `${category.color}20`,
+            "border-left": `3px solid ${category.color}`,
+          };
+        }
+      }
+      return {};
+    };
 
     return (
       <div class="tree-node">
         <div
           class={`tree-node-content ${node.type}`}
-          style={{ "padding-left": `${depth * 16 + 8}px` }}
+          style={{ "padding-left": `${depth * 16 + 8}px`, ...getCategoryStyle() }}
           onClick={() => {
             if (node.type === "function") {
               handleFunctionClick(node);
@@ -415,10 +493,19 @@ export function ObjectTree(props: Props) {
               </button>
             </Show>
             <button
+              class="edit-btn"
+              onClick={(e) => {
+                e.stopPropagation();
+                const config = node.metadata?.config as ConnectionConfig;
+                props.onEdit(config);
+              }}
+            >
+              <Icon svg={pencilSvg} size={14} />
+            </button>
+            <button
               class="delete-btn"
               onClick={(e) => {
                 e.stopPropagation();
-                console.log("Delete clicked", node);
                 const config = node.metadata?.config as ConnectionConfig;
                 props.onDelete(config.id, e);
               }}
@@ -436,13 +523,14 @@ export function ObjectTree(props: Props) {
     );
   };
 
-  // Initialize nodes when connections change
+  // Initialize nodes when connections or categories change
   createEffect(() => {
-    if (nodes().length === 0 && props.connections.length > 0) {
-      updateNodes();
-    } else if (props.connections.length !== nodes().length) {
-      updateNodes();
-    }
+    // Track both connections and categories
+    const connectionIds = props.connections.map(c => c.id + (c.category_id || "")).join(",");
+    const categoryIds = props.categories.map(c => c.id + c.name + c.color).join(",");
+
+    // Rebuild tree when connections or categories change
+    updateNodes();
   });
 
   return (
