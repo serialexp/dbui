@@ -40,6 +40,13 @@ export async function deleteConnection(id: string): Promise<void> {
   return invoke("delete_connection", { id });
 }
 
+export async function setVisibleDatabases(
+  connectionId: string,
+  count: number
+): Promise<ConnectionConfig> {
+  return invoke("set_visible_databases", { connectionId, count });
+}
+
 export async function updateConnection(
   input: UpdateConnectionInput
 ): Promise<ConnectionConfig> {

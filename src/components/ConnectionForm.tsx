@@ -256,6 +256,7 @@ export function ConnectionForm(props: Props) {
           password: dbType() === "sqlite" ? "" : password(),
           database: dbType() === "sqlite" ? null : database() || null,
           category_id: categoryId(),
+          visible_databases: props.connection!.visible_databases,
         };
         await updateConnection(input);
       } else {
@@ -268,6 +269,7 @@ export function ConnectionForm(props: Props) {
           password: dbType() === "sqlite" ? "" : password(),
           database: dbType() === "sqlite" ? null : database() || null,
           category_id: categoryId(),
+          visible_databases: null,
         };
         await saveConnection(input);
       }

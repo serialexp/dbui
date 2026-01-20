@@ -23,6 +23,7 @@ pub fn run() {
             save_connection,
             list_connections,
             delete_connection,
+            set_visible_databases,
             update_connection,
             connect,
             disconnect,

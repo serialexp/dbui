@@ -44,6 +44,8 @@ pub struct ConnectionConfig {
     pub database: Option<String>,
     #[serde(default)]
     pub category_id: Option<String>,
+    #[serde(default)]
+    pub visible_databases: Option<u16>,
 }
 
 impl ConnectionConfig {
@@ -67,6 +69,7 @@ impl ConnectionConfig {
             password,
             database,
             category_id,
+            visible_databases: None,
         }
     }
 }

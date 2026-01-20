@@ -42,6 +42,7 @@ pub struct SaveConnectionInput {
     pub password: String,
     pub database: Option<String>,
     pub category_id: Option<String>,
+    pub visible_databases: Option<u16>,
 }
 
 #[derive(serde::Deserialize)]
@@ -55,6 +56,7 @@ pub struct UpdateConnectionInput {
     pub password: String,
     pub database: Option<String>,
     pub category_id: Option<String>,
+    pub visible_databases: Option<u16>,
 }
 
 #[tauri::command]
@@ -66,7 +68,7 @@ pub fn save_connection(
         .path()
         .app_config_dir()
         .map_err(|e| format!("Failed to get config directory: {}", e))?;
-    let config = ConnectionConfig::new(
+    let mut config = ConnectionConfig::new(
         input.name,
         input.db_type,
         input.host,
@@ -76,6 +78,7 @@ pub fn save_connection(
         input.database,
         input.category_id,
     );
+    config.visible_databases = input.visible_databases;
     storage::add_connection(&config_dir, config)
 }
 
@@ -98,6 +101,22 @@ pub fn delete_connection(app: tauri::AppHandle, id: String) -> Result<(), String
 }
 
 #[tauri::command]
+pub fn set_visible_databases(
+    app: tauri::AppHandle,
+    connection_id: String,
+    count: u16,
+) -> Result<ConnectionConfig, String> {
+    let config_dir = app
+        .path()
+        .app_config_dir()
+        .map_err(|e| format!("Failed to get config directory: {}", e))?;
+    let mut config = storage::get_connection(&config_dir, &connection_id)
+        .ok_or_else(|| format!("Connection '{}' not found", connection_id))?;
+    config.visible_databases = Some(count);
+    storage::update_connection(&config_dir, config)
+}
+
+#[tauri::command]
 pub fn update_connection(
     app: tauri::AppHandle,
     input: UpdateConnectionInput,
@@ -116,6 +135,7 @@ pub fn update_connection(
         password: input.password,
         database: input.database,
         category_id: input.category_id,
+        visible_databases: input.visible_databases,
     };
     storage::update_connection(&config_dir, config)
 }

@@ -19,6 +19,7 @@ export interface ConnectionConfig {
   password: string;
   database: string | null;
   category_id: string | null;
+  visible_databases: number | null;
 }
 
 export interface SaveConnectionInput {
@@ -30,6 +31,7 @@ export interface SaveConnectionInput {
   password: string;
   database: string | null;
   category_id: string | null;
+  visible_databases: number | null;
 }
 
 export interface UpdateConnectionInput {
@@ -42,6 +44,7 @@ export interface UpdateConnectionInput {
   password: string;
   database: string | null;
   category_id: string | null;
+  visible_databases: number | null;
 }
 
 export interface SaveCategoryInput {
@@ -114,6 +117,7 @@ export interface TreeNode {
     | "constraints"
     | "constraint"
     | "empty"
+    | "more-databases"
     | "redis-keys"
     | "redis-lists"
     | "redis-hashes"

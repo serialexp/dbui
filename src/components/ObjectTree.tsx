@@ -36,6 +36,7 @@ import {
   listColumns,
   listIndexes,
   listConstraints,
+  setVisibleDatabases,
 } from "../lib/tauri";
 
 interface Props {
@@ -175,14 +176,49 @@ export function ObjectTree(props: Props) {
           await connect(config.id);
           props.onConnectionChange(config.id);
           const databases = await listDatabases(config.id);
-          children = databases.map((db) => ({
-            id: `${node.id}:db:${db}`,
-            label: db,
-            type: "database" as const,
-            children: [],
-            expanded: false,
-            metadata: { connectionId: config.id, database: db },
-          }));
+
+          // For Redis, show limited databases with "more" option
+          if (config.db_type === "redis") {
+            const visibleCount = config.visible_databases ?? 4;
+            if (databases.length > visibleCount) {
+              const visibleDbs = databases.slice(0, visibleCount);
+              const hiddenDbs = databases.slice(visibleCount);
+              children = visibleDbs.map((db) => ({
+                id: `${node.id}:db:${db}`,
+                label: db,
+                type: "database" as const,
+                children: [],
+                expanded: false,
+                metadata: { connectionId: config.id, database: db },
+              }));
+              children.push({
+                id: `${node.id}:more-dbs`,
+                label: `... ${hiddenDbs.length} more`,
+                type: "more-databases" as const,
+                children: [],
+                expanded: false,
+                metadata: { connectionId: config.id, databases: hiddenDbs, allDatabases: databases },
+              });
+            } else {
+              children = databases.map((db) => ({
+                id: `${node.id}:db:${db}`,
+                label: db,
+                type: "database" as const,
+                children: [],
+                expanded: false,
+                metadata: { connectionId: config.id, database: db },
+              }));
+            }
+          } else {
+            children = databases.map((db) => ({
+              id: `${node.id}:db:${db}`,
+              label: db,
+              type: "database" as const,
+              children: [],
+              expanded: false,
+              metadata: { connectionId: config.id, database: db },
+            }));
+          }
           break;
         }
         case "database": {
@@ -402,6 +438,64 @@ export function ObjectTree(props: Props) {
           updateNode(node.id, { loading: false });
           return;
         }
+        case "more-databases": {
+          const { connectionId, allDatabases } = node.metadata as {
+            connectionId: string;
+            databases: string[];
+            allDatabases: string[];
+          };
+          const config = findConnectionConfig(connectionId);
+          if (!config) {
+            updateNode(node.id, { loading: false });
+            return;
+          }
+
+          // Expand by 2 more databases
+          const currentCount = config.visible_databases ?? 4;
+          const newCount = currentCount + 2;
+
+          // Persist the new count
+          await setVisibleDatabases(connectionId, newCount);
+
+          // Get the connection node ID (parent of this "more" node)
+          const connectionNodeId = node.id.replace(":more-dbs", "");
+
+          // Build new children for the connection node
+          let newChildren: TreeNode[];
+          if (allDatabases.length > newCount) {
+            const visibleDbs = allDatabases.slice(0, newCount);
+            const hiddenDbs = allDatabases.slice(newCount);
+            newChildren = visibleDbs.map((db) => ({
+              id: `${connectionNodeId}:db:${db}`,
+              label: db,
+              type: "database" as const,
+              children: [],
+              expanded: false,
+              metadata: { connectionId, database: db },
+            }));
+            newChildren.push({
+              id: `${connectionNodeId}:more-dbs`,
+              label: `... ${hiddenDbs.length} more`,
+              type: "more-databases" as const,
+              children: [],
+              expanded: false,
+              metadata: { connectionId, databases: hiddenDbs, allDatabases },
+            });
+          } else {
+            newChildren = allDatabases.map((db) => ({
+              id: `${connectionNodeId}:db:${db}`,
+              label: db,
+              type: "database" as const,
+              children: [],
+              expanded: false,
+              metadata: { connectionId, database: db },
+            }));
+          }
+
+          // Update the connection node (which is the parent)
+          updateNode(connectionNodeId, { children: newChildren, loading: false });
+          return;
+        }
       }
 
       updateNode(node.id, { children, expanded: true, loading: false });
@@ -502,8 +596,8 @@ export function ObjectTree(props: Props) {
     const hasChildren =
       node.children && node.children.length > 0 ||
       ["category", "connection", "database", "schema", "tables", "views", "functions", "table"].includes(node.type);
-    const isLeaf = ["view", "function", "data", "columns", "indexes", "constraints", "empty", "redis-keys", "redis-lists", "redis-hashes", "redis-sets", "redis-sorted-sets"].includes(node.type);
-    const isClickable = !isLeaf || ["data", "columns", "indexes", "constraints", "function", "redis-keys", "redis-lists", "redis-hashes", "redis-sets", "redis-sorted-sets"].includes(node.type);
+    const isLeaf = ["view", "function", "data", "columns", "indexes", "constraints", "empty", "more-databases", "redis-keys", "redis-lists", "redis-hashes", "redis-sets", "redis-sorted-sets"].includes(node.type);
+    const isClickable = !isLeaf || ["data", "columns", "indexes", "constraints", "function", "more-databases", "redis-keys", "redis-lists", "redis-hashes", "redis-sets", "redis-sorted-sets"].includes(node.type);
 
     const getCategoryStyle = () => {
       if (node.type === "category") {
