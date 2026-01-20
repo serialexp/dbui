@@ -23,6 +23,7 @@ export function ConnectionForm(props: Props) {
   const [filePath, setFilePath] = createSignal("");
   const [connectionUrl, setConnectionUrl] = createSignal("");
   const [categoryId, setCategoryId] = createSignal<string | null>(null);
+  const [visibleDatabases, setVisibleDatabases] = createSignal<number>(4);
   const [error, setError] = createSignal<string | null>(null);
   const [saving, setSaving] = createSignal(false);
   const [updatingFromUrl, setUpdatingFromUrl] = createSignal(false);
@@ -36,6 +37,7 @@ export function ConnectionForm(props: Props) {
       setName(conn.name);
       setDbType(conn.db_type);
       setCategoryId(conn.category_id);
+      setVisibleDatabases(conn.visible_databases ?? 4);
 
       if (conn.db_type === "sqlite") {
         setFilePath(conn.host);
@@ -256,7 +258,7 @@ export function ConnectionForm(props: Props) {
           password: dbType() === "sqlite" ? "" : password(),
           database: dbType() === "sqlite" ? null : database() || null,
           category_id: categoryId(),
-          visible_databases: props.connection!.visible_databases,
+          visible_databases: dbType() === "redis" ? visibleDatabases() : null,
         };
         await updateConnection(input);
       } else {
@@ -269,7 +271,7 @@ export function ConnectionForm(props: Props) {
           password: dbType() === "sqlite" ? "" : password(),
           database: dbType() === "sqlite" ? null : database() || null,
           category_id: categoryId(),
-          visible_databases: null,
+          visible_databases: dbType() === "redis" ? visibleDatabases() : null,
         };
         await saveConnection(input);
       }
@@ -464,6 +466,21 @@ export function ConnectionForm(props: Props) {
                   onInput={(e) => setDatabase(e.currentTarget.value)}
                   placeholder="Leave empty to browse all"
                 />
+              </div>
+            </Show>
+
+            <Show when={isRedis()}>
+              <div class="form-group">
+                <label for="visibleDatabases">Visible Databases</label>
+                <input
+                  id="visibleDatabases"
+                  type="number"
+                  min="1"
+                  max="16"
+                  value={visibleDatabases()}
+                  onInput={(e) => setVisibleDatabases(parseInt(e.currentTarget.value) || 4)}
+                />
+                <span class="field-hint">Number of Redis databases to show (1-16)</span>
               </div>
             </Show>
           </Show>

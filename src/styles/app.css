@@ -608,6 +608,13 @@ tr:hover .drill-button {
   color: var(--text-primary);
 }
 
+.field-hint {
+  display: block;
+  font-size: 11px;
+  color: var(--text-secondary);
+  margin-top: 4px;
+}
+
 .form-row {
   display: flex;
   gap: 12px;
