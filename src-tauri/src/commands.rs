@@ -259,9 +259,9 @@ pub async fn list_constraints(
 }
 
 #[tauri::command]
-pub async fn execute_query(connection_id: String, query: String) -> Result<(QueryResult, u64), String> {
+pub async fn execute_query(connection_id: String, query: String, database: Option<String>) -> Result<(QueryResult, u64), String> {
     let start = std::time::Instant::now();
-    let result = get_manager().execute_query(&connection_id, &query).await?;
+    let result = get_manager().execute_query(&connection_id, &query, database.as_deref()).await?;
     let elapsed_ms = start.elapsed().as_millis() as u64;
     Ok((result, elapsed_ms))
 }

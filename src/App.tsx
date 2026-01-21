@@ -183,7 +183,7 @@ function App() {
     setMetadataView(null);
 
     try {
-      const [res, backendTime] = await executeQuery(connId, queryToExecute);
+      const [res, backendTime] = await executeQuery(connId, queryToExecute, db);
       setResult(res);
 
       const historyId = crypto.randomUUID();

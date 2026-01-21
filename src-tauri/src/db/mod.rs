@@ -316,13 +316,21 @@ impl ConnectionManager {
         &self,
         connection_id: &str,
         query: &str,
+        database: Option<&str>,
     ) -> Result<QueryResult, String> {
         let pool = self.get_pool(connection_id).await?;
         match pool.as_ref() {
             ConnectionPool::Postgres(p) => execute_query_pg(p, query).await,
             ConnectionPool::Mysql(p) => execute_query_mysql(p, query).await,
             ConnectionPool::Sqlite(p) => execute_query_sqlite(p, query).await,
-            ConnectionPool::Redis(c) => redis_db::execute_query(&mut c.clone(), query).await,
+            ConnectionPool::Redis(c) => {
+                let mut conn = c.clone();
+                // Ensure correct database is selected before executing query
+                if let Some(db) = database {
+                    redis_db::switch_database(&mut conn, db).await?;
+                }
+                redis_db::execute_query(&mut conn, query).await
+            }
         }
     }
 }
