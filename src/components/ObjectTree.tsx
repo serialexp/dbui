@@ -579,6 +579,11 @@ export function ObjectTree(props: Props) {
   };
 
   const handleRedisTypeClick = (node: TreeNode) => {
+    const { database } = node.metadata as { connectionId: string; database: string };
+
+    // Switch to the correct database first
+    props.onDatabaseSwitch(database, null);
+
     // Generate BROWSE command with type filter for each Redis data type
     const typeFilters: Record<string, string> = {
       "redis-keys": "BROWSE COUNT 100",
