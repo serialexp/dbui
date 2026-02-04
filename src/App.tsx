@@ -2,8 +2,11 @@
 // ABOUTME: Orchestrates sidebar, query editor, and results display.
 
 import { createSignal, Show, onMount, onCleanup } from "solid-js";
-import type { DatabaseType, QueryResult, CellSelection, MetadataView, FunctionInfo } from "./lib/types";
-import { executeQuery, listConnections, getFunctionDefinition, saveQueryHistory, getQueryHistory } from "./lib/tauri";
+import { confirm } from "@tauri-apps/plugin-dialog";
+import type { DatabaseType, QueryResult, CellSelection, MetadataView, FunctionInfo, TableContext } from "./lib/types";
+import { executeQuery, listConnections, getFunctionDefinition, saveQueryHistory, getQueryHistory, listColumns } from "./lib/tauri";
+import { generateDeleteQuery, mergeDeleteQuery, parseDeleteQuery } from "./lib/deleteQueryGenerator";
+import { generateUpdateQuery, type RowEdit } from "./lib/updateQueryGenerator";
 import { Sidebar } from "./components/Sidebar";
 import { QueryEditor } from "./components/QueryEditor";
 import { ResultsTable } from "./components/ResultsTable";
@@ -34,6 +37,9 @@ function App() {
   const [functionInfo, setFunctionInfo] = createSignal<FunctionInfo | null>(null);
   const [showHistory, setShowHistory] = createSignal(false);
   const [categoryColor, setCategoryColor] = createSignal<string | null>(null);
+  const [tableContext, setTableContext] = createSignal<TableContext | null>(null);
+  const [primaryKeyColumns, setPrimaryKeyColumns] = createSignal<string[]>([]);
+  const [hasPendingChanges, setHasPendingChanges] = createSignal(false);
 
   const handleConnectionChange = async (id: string | null) => {
     setActiveConnectionId(id);
@@ -116,6 +122,9 @@ function App() {
   };
 
   const handleTableSelect = async (database: string, schema: string, table: string) => {
+    const connId = activeConnectionId();
+    if (!connId) return;
+
     setActiveDatabase(database);
     setActiveSchema(schema);
     setActiveTable(table);
@@ -123,7 +132,18 @@ function App() {
     const newQuery = `SELECT * FROM ${schema}.${table} LIMIT 100;`;
     setQuery(newQuery);
     setMetadataView(null);
-    await handleExecute(newQuery);
+
+    setTableContext({ connectionId: connId, database, schema, table });
+
+    try {
+      const columns = await listColumns(connId, database, schema, table);
+      const pkCols = columns.filter((c) => c.is_primary_key).map((c) => c.name);
+      setPrimaryKeyColumns(pkCols);
+    } catch {
+      setPrimaryKeyColumns([]);
+    }
+
+    await handleExecute(newQuery, true);
   };
 
   const handleQueryGenerate = (query: string) => {
@@ -166,7 +186,7 @@ function App() {
     }
   };
 
-  const handleExecute = async (queryToExecute: string) => {
+  const handleExecute = async (queryToExecute: string, preserveTableContext = false) => {
     const connId = activeConnectionId();
     const db = activeDatabase();
     const sch = activeSchema() || "";
@@ -174,6 +194,19 @@ function App() {
     if (!connId || !db) {
       setError("No connection or database selected");
       return;
+    }
+
+    if (hasPendingChanges()) {
+      const confirmed = await confirm(
+        "You have pending edits that will be lost after the query executes. Continue?",
+        { title: "Pending Changes", kind: "warning" }
+      );
+      if (!confirmed) return;
+    }
+
+    if (!preserveTableContext) {
+      setTableContext(null);
+      setPrimaryKeyColumns([]);
     }
 
     setLoading(true);
@@ -225,6 +258,84 @@ function App() {
     } finally {
       setLoading(false);
     }
+  };
+
+  const getWhereColumns = (rows: unknown[][], columns: string[], pkCols: string[]): string[] => {
+    if (pkCols.length === 0) {
+      return columns;
+    }
+    const hasNullPk = rows.some((row) =>
+      pkCols.some((pk) => {
+        const colIndex = columns.indexOf(pk);
+        return row[colIndex] === null || row[colIndex] === undefined;
+      })
+    );
+    return hasNullPk ? columns : pkCols;
+  };
+
+  const handleGenerateDelete = (rowIndices: number[]) => {
+    const ctx = tableContext();
+    const pkCols = primaryKeyColumns();
+    const res = result();
+    if (!ctx || !res) return;
+
+    const selectedRows = rowIndices.map((i) => res.rows[i]);
+    const whereCols = getWhereColumns(selectedRows, res.columns, pkCols);
+
+    const newConditions = selectedRows.map((row) => {
+      const conditions = whereCols.map((col) => {
+        const colIndex = res.columns.indexOf(col);
+        const value = row[colIndex];
+        if (value === null || value === undefined) {
+          return `${col} IS NULL`;
+        }
+        if (typeof value === "string") {
+          const escaped = value.replace(/'/g, "''");
+          return `${col} = '${escaped}'`;
+        }
+        return `${col} = ${value}`;
+      });
+      return `(${conditions.join(" AND ")})`;
+    });
+
+    const currentQuery = query();
+    const parsed = parseDeleteQuery(currentQuery);
+
+    if (parsed && parsed.schema === ctx.schema && parsed.table === ctx.table) {
+      const merged = mergeDeleteQuery(currentQuery, newConditions);
+      if (merged) {
+        setQuery(merged);
+        return;
+      }
+    }
+
+    const deleteQuery = generateDeleteQuery(
+      ctx.table,
+      ctx.schema,
+      whereCols,
+      res.columns,
+      selectedRows
+    );
+    setQuery(deleteQuery);
+  };
+
+  const handleGenerateUpdate = (edits: RowEdit[]) => {
+    const ctx = tableContext();
+    const pkCols = primaryKeyColumns();
+    const res = result();
+    if (!ctx || !res) return;
+
+    const editedRows = edits.map((e) => e.originalRow);
+    const whereCols = getWhereColumns(editedRows, res.columns, pkCols);
+
+    const updateQuery = generateUpdateQuery(
+      ctx.table,
+      ctx.schema,
+      whereCols,
+      res.columns,
+      edits
+    );
+    setQuery(updateQuery);
   };
 
   const handleRowDoubleClick = (row: unknown[], columns: string[]) => {
@@ -331,6 +442,11 @@ function App() {
                 selectedCell={selectedCell()}
                 onCellSelect={setSelectedCell}
                 onRowDoubleClick={handleRowDoubleClick}
+                tableContext={tableContext()}
+                primaryKeyColumns={primaryKeyColumns()}
+                onGenerateDelete={handleGenerateDelete}
+                onGenerateUpdate={handleGenerateUpdate}
+                onPendingChangesChange={setHasPendingChanges}
               />
             </div>
             <CellInspector

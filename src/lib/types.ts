@@ -216,3 +216,10 @@ export interface ParsedConnection {
   password: string;
   database: string | null;
 }
+
+export interface TableContext {
+  connectionId: string;
+  database: string;
+  schema: string;
+  table: string;
+}

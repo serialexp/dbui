@@ -350,17 +350,12 @@ async fn execute_query_pg(pool: &sqlx::PgPool, query: &str) -> Result<QueryResul
             .map_err(|e| format!("Query failed: {}", e))?;
 
         let rows_affected = result.rows_affected();
-        let message = if rows_affected > 0 {
-            Some(format!("Query executed successfully. {} row(s) affected.", rows_affected))
-        } else {
-            Some("Query executed successfully.".to_string())
-        };
 
         return Ok(QueryResult {
             columns: vec![],
             rows: vec![],
             row_count: 0,
-            message,
+            message: Some(format!("{} row(s) affected.", rows_affected)),
         });
     }
 
@@ -393,6 +388,7 @@ fn pg_value_to_json(
     index: usize,
     type_name: &str,
 ) -> serde_json::Value {
+    use sqlx::Row;
     match type_name {
         "BOOL" => row
             .try_get::<bool, _>(index)
@@ -420,6 +416,31 @@ fn pg_value_to_json(
             .and_then(|v| serde_json::Number::from_f64(v))
             .map(serde_json::Value::Number)
             .unwrap_or(serde_json::Value::Null),
+        "TIMESTAMP" => row
+            .try_get::<chrono::NaiveDateTime, _>(index)
+            .ok()
+            .map(|v| serde_json::Value::String(v.to_string()))
+            .unwrap_or(serde_json::Value::Null),
+        "TIMESTAMPTZ" => row
+            .try_get::<chrono::DateTime<chrono::Utc>, _>(index)
+            .ok()
+            .map(|v| serde_json::Value::String(v.to_rfc3339()))
+            .unwrap_or(serde_json::Value::Null),
+        "DATE" => row
+            .try_get::<chrono::NaiveDate, _>(index)
+            .ok()
+            .map(|v| serde_json::Value::String(v.to_string()))
+            .unwrap_or(serde_json::Value::Null),
+        "TIME" => row
+            .try_get::<chrono::NaiveTime, _>(index)
+            .ok()
+            .map(|v| serde_json::Value::String(v.to_string()))
+            .unwrap_or(serde_json::Value::Null),
+        "UUID" => row
+            .try_get::<uuid::Uuid, _>(index)
+            .ok()
+            .map(|v| serde_json::Value::String(v.to_string()))
+            .unwrap_or(serde_json::Value::Null),
         _ => row
             .try_get::<String, _>(index)
             .ok()
@@ -441,17 +462,12 @@ async fn execute_query_mysql(pool: &sqlx::MySqlPool, query: &str) -> Result<Quer
             .map_err(|e| format!("Query failed: {}", e))?;
 
         let rows_affected = result.rows_affected();
-        let message = if rows_affected > 0 {
-            Some(format!("Query executed successfully. {} row(s) affected.", rows_affected))
-        } else {
-            Some("Query executed successfully.".to_string())
-        };
 
         return Ok(QueryResult {
             columns: vec![],
             rows: vec![],
             row_count: 0,
-            message,
+            message: Some(format!("{} row(s) affected.", rows_affected)),
         });
     }
 
@@ -527,17 +543,12 @@ async fn execute_query_sqlite(pool: &sqlx::SqlitePool, query: &str) -> Result<Qu
             .map_err(|e| format!("Query failed: {}", e))?;
 
         let rows_affected = result.rows_affected();
-        let message = if rows_affected > 0 {
-            Some(format!("Query executed successfully. {} row(s) affected.", rows_affected))
-        } else {
-            Some("Query executed successfully.".to_string())
-        };
 
         return Ok(QueryResult {
             columns: vec![],
             rows: vec![],
             row_count: 0,
-            message,
+            message: Some(format!("{} row(s) affected.", rows_affected)),
         });
     }
 

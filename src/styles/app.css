@@ -374,6 +374,12 @@ body {
   font-weight: normal;
 }
 
+.result-message {
+  font-size: 12px;
+  color: var(--success-color);
+  font-weight: normal;
+}
+
 .results-content {
   flex: 1;
   overflow: auto;
@@ -491,6 +497,105 @@ td.action-cell {
 
 tr:hover .drill-button {
   opacity: 1;
+}
+
+/* Delete column styles */
+th.delete-column,
+td.delete-cell {
+  width: 32px;
+  min-width: 32px;
+  max-width: 32px;
+  padding: 4px 8px;
+  text-align: center;
+}
+
+th.delete-column.disabled,
+td.delete-cell.disabled {
+  opacity: 0.3;
+}
+
+td.delete-cell input[type="checkbox"] {
+  cursor: pointer;
+  width: 14px;
+  height: 14px;
+}
+
+td.delete-cell.disabled input[type="checkbox"] {
+  cursor: not-allowed;
+}
+
+tr.marked-for-deletion td {
+  background: rgba(241, 76, 76, 0.15) !important;
+}
+
+tr.marked-for-deletion:hover td {
+  background: rgba(241, 76, 76, 0.25) !important;
+}
+
+.generate-delete-btn,
+.generate-update-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.generate-update-btn {
+  margin-left: auto;
+  background: var(--accent-color);
+  color: white;
+}
+
+.generate-update-btn:hover {
+  background: var(--accent-hover);
+}
+
+.generate-delete-btn {
+  background: var(--error-color);
+  color: white;
+}
+
+.generate-delete-btn:hover {
+  background: #d43d3d;
+}
+
+/* Cell editing styles */
+tr.row-edited td {
+  background: rgba(0, 120, 212, 0.1) !important;
+}
+
+tr.row-edited:hover td {
+  background: rgba(0, 120, 212, 0.15) !important;
+}
+
+td.cell-edited {
+  background: rgba(0, 120, 212, 0.2) !important;
+  font-weight: 500;
+}
+
+tr:hover td.cell-edited {
+  background: rgba(0, 120, 212, 0.25) !important;
+}
+
+.cell-edit-input {
+  width: 100%;
+  padding: 2px 4px;
+  border: 1px solid var(--accent-color);
+  border-radius: 2px;
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  font-family: "SF Mono", Monaco, Consolas, monospace;
+  font-size: 12px;
+  outline: none;
+}
+
+.cell-edit-input:focus {
+  box-shadow: 0 0 0 2px rgba(0, 120, 212, 0.3);
 }
 
 .results-content .loading,
