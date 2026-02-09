@@ -1,13 +1,15 @@
 // ABOUTME: Displays query results in a scrollable table.
 // ABOUTME: Shows columns, rows, and row count from executed queries.
 
-import { createSignal, createEffect, For, Show } from "solid-js";
-import type { QueryResult, CellSelection, TableContext } from "../lib/types";
+import { createSignal, createEffect, onCleanup, For, Show } from "solid-js";
+import type { QueryResult, CellSelection, TableContext, DatabaseType } from "../lib/types";
 import type { RowEdit } from "../lib/updateQueryGenerator";
+import { exportAsJson, exportAsSqlInsert } from "../lib/resultExporter";
 import { Icon } from "./Icon";
 import arrowRightSvg from "@phosphor-icons/core/assets/regular/arrow-right.svg?raw";
 import trashSvg from "@phosphor-icons/core/assets/regular/trash.svg?raw";
 import pencilSvg from "@phosphor-icons/core/assets/regular/pencil-simple.svg?raw";
+import exportSvg from "@phosphor-icons/core/assets/regular/export.svg?raw";
 
 interface Props {
   result: QueryResult | null;
@@ -21,7 +23,10 @@ interface Props {
   onGenerateDelete?: (rowIndices: number[]) => void;
   onGenerateUpdate?: (edits: RowEdit[]) => void;
   onPendingChangesChange?: (hasPending: boolean) => void;
+  dbType?: DatabaseType | null;
 }
+
+type ExportFormat = "json" | "sql";
 
 export function ResultsTable(props: Props) {
   const MAX_DISPLAY_ROWS = 1000;
@@ -30,6 +35,20 @@ export function ResultsTable(props: Props) {
   const [editingCell, setEditingCell] = createSignal<{ row: number; col: number } | null>(null);
   const [editValue, setEditValue] = createSignal("");
   const [lastClickedRow, setLastClickedRow] = createSignal<number | null>(null);
+  const [exportMenuOpen, setExportMenuOpen] = createSignal(false);
+  const [exportFeedback, setExportFeedback] = createSignal<string | null>(null);
+  let exportDropdownRef: HTMLDivElement | undefined;
+
+  const handleClickOutside = (e: MouseEvent) => {
+    if (exportMenuOpen() && exportDropdownRef && !exportDropdownRef.contains(e.target as Node)) {
+      setExportMenuOpen(false);
+    }
+  };
+
+  createEffect(() => {
+    document.addEventListener("click", handleClickOutside);
+    onCleanup(() => document.removeEventListener("click", handleClickOutside));
+  });
 
   createEffect(() => {
     props.result;
@@ -201,6 +220,28 @@ export function ResultsTable(props: Props) {
     return cols.length >= 2 && cols[0] === "key" && cols[1] === "type";
   };
 
+  const handleExport = async (format: ExportFormat) => {
+    if (!props.result) return;
+    setExportMenuOpen(false);
+
+    let content: string;
+    if (format === "json") {
+      content = exportAsJson(props.result);
+    } else {
+      const tableName = props.tableContext?.table ?? "table_name";
+      content = exportAsSqlInsert(props.result, tableName, props.dbType);
+    }
+
+    try {
+      await navigator.clipboard.writeText(content);
+      setExportFeedback(format === "json" ? "JSON copied!" : "SQL copied!");
+      setTimeout(() => setExportFeedback(null), 1500);
+    } catch {
+      setExportFeedback("Copy failed");
+      setTimeout(() => setExportFeedback(null), 1500);
+    }
+  };
+
   return (
     <div class="results-table">
       <div class="results-header">
@@ -218,6 +259,28 @@ export function ResultsTable(props: Props) {
                 {" "}(showing first {MAX_DISPLAY_ROWS})
               </Show>
             </span>
+            <div class="export-dropdown" ref={exportDropdownRef}>
+              <button
+                class="export-btn"
+                onClick={() => setExportMenuOpen(!exportMenuOpen())}
+                title="Export results"
+              >
+                <Icon svg={exportSvg} size={14} />
+                <Show when={exportFeedback()} fallback="Export">
+                  {exportFeedback()}
+                </Show>
+              </button>
+              <Show when={exportMenuOpen()}>
+                <div class="export-menu">
+                  <button onClick={() => handleExport("json")}>
+                    Copy as JSON
+                  </button>
+                  <button onClick={() => handleExport("sql")}>
+                    Copy as SQL INSERT
+                  </button>
+                </div>
+              </Show>
+            </div>
           </Show>
         </Show>
         <Show when={editedCells().size > 0}>

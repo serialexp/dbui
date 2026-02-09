@@ -19,7 +19,7 @@ interface Props {
   activeConnectionId: string | null;
   onConnectionChange: (id: string | null) => void;
   onDatabaseSwitch: (database: string, schema: string | null) => void;
-  onTableSelect: (database: string, schema: string, table: string) => void;
+  onTableSelect: (connectionId: string, database: string, schema: string, table: string) => void;
   onQueryGenerate: (query: string) => void;
   onMetadataSelect: (view: MetadataView) => void;
   onFunctionSelect: (connectionId: string, database: string, schema: string, functionName: string) => void;

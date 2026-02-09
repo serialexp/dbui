@@ -1,12 +1,23 @@
 // ABOUTME: Main application component for DBUI.
 // ABOUTME: Orchestrates sidebar, query editor, and results display.
 
-import { createSignal, Show, onMount, onCleanup } from "solid-js";
+import { Show, onMount, onCleanup } from "solid-js";
 import { confirm } from "@tauri-apps/plugin-dialog";
-import type { DatabaseType, QueryResult, CellSelection, MetadataView, FunctionInfo, TableContext } from "./lib/types";
-import { executeQuery, listConnections, getFunctionDefinition, saveQueryHistory, getQueryHistory, listColumns } from "./lib/tauri";
-import { generateDeleteQuery, mergeDeleteQuery, parseDeleteQuery } from "./lib/deleteQueryGenerator";
+import type { MetadataView } from "./lib/types";
+import {
+  executeQuery,
+  listConnections,
+  getFunctionDefinition,
+  saveQueryHistory,
+  listColumns,
+} from "./lib/tauri";
+import {
+  generateDeleteQuery,
+  mergeDeleteQuery,
+  parseDeleteQuery,
+} from "./lib/deleteQueryGenerator";
 import { generateUpdateQuery, type RowEdit } from "./lib/updateQueryGenerator";
+import { StoreProvider, useStore } from "./lib/store";
 import { Sidebar } from "./components/Sidebar";
 import { QueryEditor } from "./components/QueryEditor";
 import { ResultsTable } from "./components/ResultsTable";
@@ -15,155 +26,104 @@ import { MetadataTable } from "./components/MetadataTable";
 import { FunctionViewer } from "./components/FunctionViewer";
 import { ConnectionPath } from "./components/ConnectionPath";
 import { QueryHistory } from "./components/QueryHistory";
+import { TabBar } from "./components/TabBar";
 import "./styles/app.css";
 
-function App() {
-  const [activeConnectionId, setActiveConnectionId] = createSignal<string | null>(null);
-  const [activeConnectionName, setActiveConnectionName] = createSignal<string | null>(null);
-  const [activeDbType, setActiveDbType] = createSignal<DatabaseType | null>(null);
-  const [activeDatabase, setActiveDatabase] = createSignal<string | null>(null);
-  const [activeSchema, setActiveSchema] = createSignal<string | null>(null);
-  const [activeTable, setActiveTable] = createSignal<string | null>(null);
-  const [activeViewType, setActiveViewType] = createSignal<string | null>(null);
-  const [query, setQuery] = createSignal("SELECT 1;");
-  const [queryNavHistory, setQueryNavHistory] = createSignal<{ id: string; query: string }[]>([]);
-  const [queryNavIndex, setQueryNavIndex] = createSignal(-1);
-  const [result, setResult] = createSignal<QueryResult | null>(null);
-  const [error, setError] = createSignal<string | null>(null);
-  const [loading, setLoading] = createSignal(false);
-  const [selectedCell, setSelectedCell] = createSignal<CellSelection | null>(null);
-  const [metadataView, setMetadataView] = createSignal<MetadataView>(null);
-  const [selectedMetadataRow, setSelectedMetadataRow] = createSignal<number | null>(null);
-  const [functionInfo, setFunctionInfo] = createSignal<FunctionInfo | null>(null);
-  const [showHistory, setShowHistory] = createSignal(false);
-  const [categoryColor, setCategoryColor] = createSignal<string | null>(null);
-  const [tableContext, setTableContext] = createSignal<TableContext | null>(null);
-  const [primaryKeyColumns, setPrimaryKeyColumns] = createSignal<string[]>([]);
-  const [hasPendingChanges, setHasPendingChanges] = createSignal(false);
+function AppContent() {
+  const {
+    store,
+    activeTab,
+    createTab,
+    updateActiveTab,
+    canGoBack,
+    canGoForward,
+    goBack,
+    goForward,
+    pushQueryToNavHistory,
+    setShowHistory,
+  } = useStore();
 
-  const handleConnectionChange = async (id: string | null) => {
-    setActiveConnectionId(id);
-    if (id) {
-      const connections = await listConnections();
-      const conn = connections.find((c) => c.id === id);
-      if (conn) {
-        setActiveDbType(conn.db_type);
-        setActiveConnectionName(conn.name);
-      }
-    } else {
-      setActiveDbType(null);
-      setActiveConnectionName(null);
-      setActiveDatabase(null);
-      setActiveSchema(null);
-      setActiveTable(null);
-      setActiveViewType(null);
-    }
-    setResult(null);
-    setError(null);
-    setSelectedCell(null);
-    setMetadataView(null);
+  // Connection/database changes in sidebar are just for navigation
+  // Tabs are created when clicking on tables/functions/metadata
+  const handleConnectionChange = async (_id: string | null) => {
+    // Sidebar handles its own connection state
   };
 
-  const handleDatabaseSwitch = async (database: string, schema: string | null) => {
-    setActiveDatabase(database);
-    setActiveSchema(schema);
-    setActiveTable(null);
-    setActiveViewType(null);
-
-    // Load query history for this connection/database
-    const connId = activeConnectionId();
-    if (connId) {
-      try {
-        const history = await getQueryHistory({
-          connection_id: connId,
-          database: database,
-          limit: 50,
-        });
-        if (history.length > 0) {
-          // History comes newest-first, reverse to get chronological order
-          const chronological = [...history].reverse();
-          const navEntries = chronological.map(entry => ({ id: entry.id, query: entry.query }));
-          setQueryNavHistory(navEntries);
-          setQueryNavIndex(navEntries.length - 1);
-          setQuery(history[0].query);
-        }
-      } catch (err) {
-        console.error("Failed to load query history:", err);
-      }
-    }
+  const handleDatabaseSwitch = async (_database: string, _schema: string | null) => {
+    // Sidebar handles its own database state
   };
 
-  const pushQueryToNavHistory = (id: string, queryText: string) => {
-    const history = queryNavHistory();
-    const index = queryNavIndex();
-    // Don't add if same as current
-    if (index >= 0 && history[index]?.id === id) return;
-    // Truncate forward history and add new entry
-    const newHistory = [...history.slice(0, index + 1), { id, query: queryText }];
-    setQueryNavHistory(newHistory);
-    setQueryNavIndex(newHistory.length - 1);
-  };
+  const handleTableSelect = async (
+    connectionId: string,
+    database: string,
+    schema: string,
+    table: string
+  ) => {
+    const connections = await listConnections();
+    const conn = connections.find((c) => c.id === connectionId);
+    if (!conn) return;
 
-  const canGoBack = () => queryNavIndex() > 0;
-  const canGoForward = () => queryNavIndex() < queryNavHistory().length - 1;
-
-  const handleQueryBack = () => {
-    if (!canGoBack()) return;
-    const newIndex = queryNavIndex() - 1;
-    setQueryNavIndex(newIndex);
-    setQuery(queryNavHistory()[newIndex].query);
-  };
-
-  const handleQueryForward = () => {
-    if (!canGoForward()) return;
-    const newIndex = queryNavIndex() + 1;
-    setQueryNavIndex(newIndex);
-    setQuery(queryNavHistory()[newIndex].query);
-  };
-
-  const handleTableSelect = async (database: string, schema: string, table: string) => {
-    const connId = activeConnectionId();
-    if (!connId) return;
-
-    setActiveDatabase(database);
-    setActiveSchema(schema);
-    setActiveTable(table);
-    setActiveViewType("data");
     const newQuery = `SELECT * FROM ${schema}.${table} LIMIT 100;`;
-    setQuery(newQuery);
-    setMetadataView(null);
 
-    setTableContext({ connectionId: connId, database, schema, table });
+    // Create a new tab for the table
+    createTab({
+      connectionId,
+      connectionName: conn.name,
+      dbType: conn.db_type,
+      categoryColor: null, // Will be set by category effect if needed
+      database,
+      schema,
+      table,
+      viewType: "data",
+      query: newQuery,
+      metadataView: null,
+      tableContext: { connectionId, database, schema, table },
+    });
+
+    // Get the newly active tab and fetch primary key columns
+    const newTab = activeTab();
+    if (!newTab) return;
 
     try {
-      const columns = await listColumns(connId, database, schema, table);
+      const columns = await listColumns(connectionId, database, schema, table);
       const pkCols = columns.filter((c) => c.is_primary_key).map((c) => c.name);
-      setPrimaryKeyColumns(pkCols);
+      updateActiveTab({ primaryKeyColumns: pkCols });
     } catch {
-      setPrimaryKeyColumns([]);
+      updateActiveTab({ primaryKeyColumns: [] });
     }
 
     await handleExecute(newQuery, true);
   };
 
   const handleQueryGenerate = (query: string) => {
-    setQuery(query);
+    updateActiveTab({ query });
   };
 
-  const handleMetadataSelect = (view: MetadataView) => {
-    if (view) {
-      setActiveDatabase(view.database);
-      setActiveSchema(view.schema);
-      setActiveTable(view.table);
-      setActiveViewType(view.type);
-    }
-    setMetadataView(view);
-    setSelectedMetadataRow(null);
-    setSelectedCell(null);
+  const handleMetadataSelect = async (view: MetadataView) => {
+    if (!view) return;
+
+    const connections = await listConnections();
+    const conn = connections.find((c) => c.id === view.connectionId);
+    if (!conn) return;
+
+    // Create a new tab for metadata
+    createTab({
+      connectionId: view.connectionId,
+      connectionName: conn.name,
+      dbType: conn.db_type,
+      categoryColor: null,
+      database: view.database,
+      schema: view.schema,
+      table: view.table,
+      viewType: view.type,
+      metadataView: view,
+      selectedMetadataRow: null,
+      selectedCell: null,
+    });
   };
 
   const handleMetadataRowSelect = (rowIndex: number) => {
-    setSelectedMetadataRow(rowIndex);
+    updateActiveTab({ selectedMetadataRow: rowIndex });
   };
 
   const handleFunctionSelect = async (
@@ -172,31 +132,54 @@ function App() {
     schema: string,
     functionName: string
   ) => {
+    const connections = await listConnections();
+    const conn = connections.find((c) => c.id === connectionId);
+    if (!conn) return;
+
     try {
-      setActiveDatabase(database);
-      setActiveSchema(schema);
-      setActiveTable(functionName);  // Use function name as "table" for breadcrumb
-      setActiveViewType("function");
-      const info = await getFunctionDefinition(connectionId, database, schema, functionName);
-      setFunctionInfo(info);
-      setMetadataView(null);
-      setSelectedCell(null);
+      const info = await getFunctionDefinition(
+        connectionId,
+        database,
+        schema,
+        functionName
+      );
+
+      // Create a new tab for the function
+      createTab({
+        connectionId,
+        connectionName: conn.name,
+        dbType: conn.db_type,
+        categoryColor: null,
+        database,
+        schema,
+        table: functionName,
+        viewType: "function",
+        functionInfo: info,
+        metadataView: null,
+        selectedCell: null,
+      });
     } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
+      console.error("Failed to load function:", err);
     }
   };
 
-  const handleExecute = async (queryToExecute: string, preserveTableContext = false) => {
-    const connId = activeConnectionId();
-    const db = activeDatabase();
-    const sch = activeSchema() || "";
+  const handleExecute = async (
+    queryToExecute: string,
+    preserveTableContext = false
+  ) => {
+    const tab = activeTab();
+    if (!tab) return;
+
+    const connId = tab.connectionId;
+    const db = tab.database;
+    const sch = tab.schema || "";
 
     if (!connId || !db) {
-      setError("No connection or database selected");
+      updateActiveTab({ error: "No connection or database selected" });
       return;
     }
 
-    if (hasPendingChanges()) {
+    if (tab.hasPendingChanges) {
       const confirmed = await confirm(
         "You have pending edits that will be lost after the query executes. Continue?",
         { title: "Pending Changes", kind: "warning" }
@@ -205,19 +188,23 @@ function App() {
     }
 
     if (!preserveTableContext) {
-      setTableContext(null);
-      setPrimaryKeyColumns([]);
+      updateActiveTab({
+        tableContext: null,
+        primaryKeyColumns: [],
+      });
     }
 
-    setLoading(true);
-    setError(null);
-    setResult(null);
-    setSelectedCell(null);
-    setMetadataView(null);
+    updateActiveTab({
+      loading: true,
+      error: null,
+      result: null,
+      selectedCell: null,
+      metadataView: null,
+    });
 
     try {
       const [res, backendTime] = await executeQuery(connId, queryToExecute, db);
-      setResult(res);
+      updateActiveTab({ result: res, loading: false });
 
       const historyId = crypto.randomUUID();
       pushQueryToNavHistory(historyId, queryToExecute);
@@ -234,10 +221,9 @@ function App() {
         success: true,
         error_message: null,
       }).catch(console.error);
-
     } catch (err) {
       const errorMsg = err instanceof Error ? err.message : String(err);
-      setError(errorMsg);
+      updateActiveTab({ error: errorMsg, loading: false });
 
       const historyId = crypto.randomUUID();
       pushQueryToNavHistory(historyId, queryToExecute);
@@ -254,13 +240,14 @@ function App() {
         success: false,
         error_message: errorMsg,
       }).catch(console.error);
-
-    } finally {
-      setLoading(false);
     }
   };
 
-  const getWhereColumns = (rows: unknown[][], columns: string[], pkCols: string[]): string[] => {
+  const getWhereColumns = (
+    rows: unknown[][],
+    columns: string[],
+    pkCols: string[]
+  ): string[] => {
     if (pkCols.length === 0) {
       return columns;
     }
@@ -274,9 +261,12 @@ function App() {
   };
 
   const handleGenerateDelete = (rowIndices: number[]) => {
-    const ctx = tableContext();
-    const pkCols = primaryKeyColumns();
-    const res = result();
+    const tab = activeTab();
+    if (!tab) return;
+
+    const ctx = tab.tableContext;
+    const pkCols = tab.primaryKeyColumns;
+    const res = tab.result;
     if (!ctx || !res) return;
 
     const selectedRows = rowIndices.map((i) => res.rows[i]);
@@ -298,13 +288,13 @@ function App() {
       return `(${conditions.join(" AND ")})`;
     });
 
-    const currentQuery = query();
+    const currentQuery = tab.query;
     const parsed = parseDeleteQuery(currentQuery);
 
     if (parsed && parsed.schema === ctx.schema && parsed.table === ctx.table) {
       const merged = mergeDeleteQuery(currentQuery, newConditions);
       if (merged) {
-        setQuery(merged);
+        updateActiveTab({ query: merged });
         return;
       }
     }
@@ -316,13 +306,16 @@ function App() {
       res.columns,
       selectedRows
     );
-    setQuery(deleteQuery);
+    updateActiveTab({ query: deleteQuery });
   };
 
   const handleGenerateUpdate = (edits: RowEdit[]) => {
-    const ctx = tableContext();
-    const pkCols = primaryKeyColumns();
-    const res = result();
+    const tab = activeTab();
+    if (!tab) return;
+
+    const ctx = tab.tableContext;
+    const pkCols = tab.primaryKeyColumns;
+    const res = tab.result;
     if (!ctx || !res) return;
 
     const editedRows = edits.map((e) => e.originalRow);
@@ -335,16 +328,22 @@ function App() {
       res.columns,
       edits
     );
-    setQuery(updateQuery);
+    updateActiveTab({ query: updateQuery });
   };
 
   const handleRowDoubleClick = (row: unknown[], columns: string[]) => {
-    // Handle Redis BROWSE results - columns are "key" and "type"
-    if (activeDbType() === "redis" && columns.length >= 2 && columns[0] === "key" && columns[1] === "type") {
+    const tab = activeTab();
+    if (!tab) return;
+
+    if (
+      tab.dbType === "redis" &&
+      columns.length >= 2 &&
+      columns[0] === "key" &&
+      columns[1] === "type"
+    ) {
       const key = String(row[0]);
       const type = String(row[1]);
 
-      // Generate appropriate command based on type
       const commands: Record<string, string> = {
         string: `GET "${key}"`,
         list: `LRANGE "${key}" 0 -1`,
@@ -355,121 +354,158 @@ function App() {
       };
 
       const command = commands[type] || `TYPE "${key}"`;
-      setQuery(command);
+      updateActiveTab({ query: command });
       handleExecute(command);
     }
   };
 
+  const handleCloseWithPending = async (_tabId: string): Promise<boolean> => {
+    return await confirm(
+      "This tab has pending edits that will be lost. Close anyway?",
+      { title: "Pending Changes", kind: "warning" }
+    );
+  };
+
+  const handleCategoryColorChange = (color: string | null) => {
+    updateActiveTab({ categoryColor: color });
+  };
+
   onMount(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      if ((e.ctrlKey || e.metaKey) && e.key === 'h') {
+      if ((e.ctrlKey || e.metaKey) && e.key === "h") {
         e.preventDefault();
         setShowHistory(true);
       }
     };
-    window.addEventListener('keydown', handleKeyDown);
-    onCleanup(() => window.removeEventListener('keydown', handleKeyDown));
+    window.addEventListener("keydown", handleKeyDown);
+    onCleanup(() => window.removeEventListener("keydown", handleKeyDown));
   });
+
+  const tab = () => activeTab();
 
   return (
     <div class="app">
-      <Show when={categoryColor()}>
+      <Show when={tab()?.categoryColor}>
         <div
           class="category-overlay"
           style={{
-            "box-shadow": `inset 0 0 30px ${categoryColor()}40, inset 0 0 15px ${categoryColor()}20`,
+            "box-shadow": `inset 0 0 30px ${tab()?.categoryColor}40, inset 0 0 15px ${tab()?.categoryColor}20`,
           }}
         />
       </Show>
       <Sidebar
-        activeConnectionId={activeConnectionId()}
+        activeConnectionId={tab()?.connectionId ?? null}
         onConnectionChange={handleConnectionChange}
         onDatabaseSwitch={handleDatabaseSwitch}
         onTableSelect={handleTableSelect}
         onQueryGenerate={handleQueryGenerate}
         onMetadataSelect={handleMetadataSelect}
         onFunctionSelect={handleFunctionSelect}
-        onCategoryColorChange={setCategoryColor}
+        onCategoryColorChange={handleCategoryColorChange}
       />
       <main class="main-content">
-        <ConnectionPath
-          connectionId={activeConnectionId()}
-          connectionName={activeConnectionName()}
-          database={activeDatabase()}
-          schema={activeSchema()}
-          table={activeTable()}
-          viewType={activeViewType()}
-          onHistoryClick={() => setShowHistory(true)}
-        />
-
-        <Show when={!metadataView() && !functionInfo()}>
-          <QueryEditor
-            value={query()}
-            onChange={setQuery}
-            onExecute={handleExecute}
-            dbType={activeDbType()}
-            disabled={!activeConnectionId() || loading()}
-            canGoBack={canGoBack()}
-            canGoForward={canGoForward()}
-            onBack={handleQueryBack}
-            onForward={handleQueryForward}
-          />
+        <Show when={store.tabs.length > 0}>
+          <TabBar onCloseWithPending={handleCloseWithPending} />
         </Show>
 
-        <Show when={metadataView()}>
-          <MetadataTable
-            view={metadataView()!}
-            selectedRow={selectedMetadataRow()}
-            onRowSelect={handleMetadataRowSelect}
-            dbType={activeDbType()}
+        <Show
+          when={tab()}
+          fallback={
+            <div class="empty-state">
+              <p>Select a table or connection from the sidebar to get started.</p>
+            </div>
+          }
+        >
+          <ConnectionPath
+            connectionId={tab()!.connectionId}
+            connectionName={tab()!.connectionName}
+            database={tab()!.database}
+            schema={tab()!.schema}
+            table={tab()!.table}
+            viewType={tab()!.viewType}
+            onHistoryClick={() => setShowHistory(true)}
           />
-        </Show>
 
-        <Show when={functionInfo()}>
-          <FunctionViewer
-            functionInfo={functionInfo()}
-            dbType={activeDbType()}
-          />
-        </Show>
+          <Show when={!tab()!.metadataView && !tab()!.functionInfo}>
+            <QueryEditor
+              value={tab()!.query}
+              onChange={(q) => updateActiveTab({ query: q })}
+              onExecute={handleExecute}
+              dbType={tab()!.dbType}
+              disabled={!tab()!.connectionId || tab()!.loading}
+              canGoBack={canGoBack()}
+              canGoForward={canGoForward()}
+              onBack={goBack}
+              onForward={goForward}
+            />
+          </Show>
 
-        <Show when={!metadataView() && !functionInfo()}>
-          <div class="results-area">
-            <div class="results-table-wrapper">
-              <ResultsTable
-                result={result()}
-                error={error()}
-                loading={loading()}
-                selectedCell={selectedCell()}
-                onCellSelect={setSelectedCell}
-                onRowDoubleClick={handleRowDoubleClick}
-                tableContext={tableContext()}
-                primaryKeyColumns={primaryKeyColumns()}
-                onGenerateDelete={handleGenerateDelete}
-                onGenerateUpdate={handleGenerateUpdate}
-                onPendingChangesChange={setHasPendingChanges}
+          <Show when={tab()!.metadataView}>
+            <MetadataTable
+              view={tab()!.metadataView!}
+              selectedRow={tab()!.selectedMetadataRow}
+              onRowSelect={handleMetadataRowSelect}
+              dbType={tab()!.dbType}
+            />
+          </Show>
+
+          <Show when={tab()!.functionInfo}>
+            <FunctionViewer
+              functionInfo={tab()!.functionInfo}
+              dbType={tab()!.dbType}
+            />
+          </Show>
+
+          <Show when={!tab()!.metadataView && !tab()!.functionInfo}>
+            <div class="results-area">
+              <div class="results-table-wrapper">
+                <ResultsTable
+                  result={tab()!.result}
+                  error={tab()!.error}
+                  loading={tab()!.loading}
+                  selectedCell={tab()!.selectedCell}
+                  onCellSelect={(sel) => updateActiveTab({ selectedCell: sel })}
+                  onRowDoubleClick={handleRowDoubleClick}
+                  tableContext={tab()!.tableContext}
+                  primaryKeyColumns={tab()!.primaryKeyColumns}
+                  onGenerateDelete={handleGenerateDelete}
+                  onGenerateUpdate={handleGenerateUpdate}
+                  onPendingChangesChange={(p) =>
+                    updateActiveTab({ hasPendingChanges: p })
+                  }
+                  dbType={tab()!.dbType}
+                />
+              </div>
+              <CellInspector
+                selection={tab()!.selectedCell}
+                onClose={() => updateActiveTab({ selectedCell: null })}
               />
             </div>
-            <CellInspector
-              selection={selectedCell()}
-              onClose={() => setSelectedCell(null)}
-            />
-          </div>
+          </Show>
         </Show>
 
-        <Show when={showHistory()}>
+        <Show when={store.showHistory}>
           <QueryHistory
             onClose={() => setShowHistory(false)}
             onQuerySelect={(query) => {
-              setQuery(query);
+              updateActiveTab({ query });
               setShowHistory(false);
             }}
-            connectionId={activeConnectionId()}
-            database={activeDatabase()}
-            schema={activeSchema()}
+            connectionId={tab()?.connectionId ?? null}
+            database={tab()?.database ?? null}
+            schema={tab()?.schema ?? null}
           />
         </Show>
       </main>
     </div>
+  );
+}
+
+function App() {
+  return (
+    <StoreProvider>
+      <AppContent />
+    </StoreProvider>
   );
 }
 

@@ -45,7 +45,7 @@ interface Props {
   activeConnectionId: string | null;
   onConnectionChange: (id: string | null) => void;
   onDatabaseSwitch: (database: string, schema: string | null) => void;
-  onTableSelect: (database: string, schema: string, table: string) => void;
+  onTableSelect: (connectionId: string, database: string, schema: string, table: string) => void;
   onQueryGenerate: (query: string) => void;
   onEdit: (connection: ConnectionConfig) => void;
   onDelete: (id: string, e: Event) => void;
@@ -413,7 +413,7 @@ export function ObjectTree(props: Props) {
             schema: string;
             table: string;
           };
-          props.onTableSelect(database, schema, table);
+          props.onTableSelect(connectionId, database, schema, table);
           updateNode(node.id, { loading: false });
           return;
         }
