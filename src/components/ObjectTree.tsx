@@ -24,6 +24,7 @@ import lightningSvg from "@phosphor-icons/core/assets/regular/lightning.svg?raw"
 import lockSvg from "@phosphor-icons/core/assets/regular/lock.svg?raw";
 import functionSvg from "@phosphor-icons/core/assets/regular/function.svg?raw";
 import folderSvg from "@phosphor-icons/core/assets/regular/folder.svg?raw";
+import arrowsClockwiseSvg from "@phosphor-icons/core/assets/regular/arrows-clockwise.svg?raw";
 import {
   connect,
   disconnect,
@@ -505,6 +506,11 @@ export function ObjectTree(props: Props) {
     }
   };
 
+  const handleReload = async (node: TreeNode) => {
+    updateNode(node.id, { children: [], expanded: false });
+    await handleToggle({ ...node, expanded: false, children: [] });
+  };
+
   const handleDisconnect = async (node: TreeNode) => {
     const config = node.metadata?.config as ConnectionConfig;
     try {
@@ -645,6 +651,18 @@ export function ObjectTree(props: Props) {
           </span>
           <span class="tree-node-icon">{getNodeIcon(node)}</span>
           <span class="tree-label">{node.label}</span>
+          <Show when={node.expanded && ["connection", "database", "schema"].includes(node.type)}>
+            <button
+              class="reload-btn"
+              onClick={(e) => {
+                e.stopPropagation();
+                handleReload(node);
+              }}
+              title="Reload"
+            >
+              <Icon svg={arrowsClockwiseSvg} size={14} />
+            </button>
+          </Show>
           <Show when={node.type === "connection"}>
             <Show when={node.expanded}>
               <button

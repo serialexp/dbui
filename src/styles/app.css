@@ -63,6 +63,7 @@ body {
   display: flex;
   flex-direction: column;
   overflow: hidden;
+  -webkit-user-select: none;
   user-select: none;
 }
 
@@ -125,6 +126,7 @@ body {
 }
 
 .tree-node {
+  -webkit-user-select: none;
   user-select: none;
 }
 
@@ -218,6 +220,7 @@ body {
   font-size: 12px;
 }
 
+.reload-btn,
 .disconnect-btn,
 .edit-btn,
 .delete-btn {
@@ -237,6 +240,7 @@ body {
   pointer-events: auto;
 }
 
+.tree-node-content:hover .reload-btn,
 .tree-node-content:hover .disconnect-btn,
 .tree-node-content:hover .edit-btn,
 .tree-node-content:hover .delete-btn {
@@ -248,6 +252,7 @@ body {
   color: white;
 }
 
+.reload-btn:hover,
 .disconnect-btn:hover,
 .edit-btn:hover {
   background: var(--accent-color);
@@ -441,6 +446,8 @@ td {
   overflow: hidden;
   text-overflow: ellipsis;
   cursor: pointer;
+  -webkit-user-select: none;
+  user-select: none;
 }
 
 td.null {
@@ -634,29 +641,31 @@ tr.row-edited:hover td {
   background: rgba(0, 120, 212, 0.15) !important;
 }
 
-td.cell-edited {
-  background: rgba(0, 120, 212, 0.2) !important;
+tr.row-edited td.cell-edited {
+  background: rgba(0, 120, 212, 0.3) !important;
   font-weight: 500;
+
 }
 
-tr:hover td.cell-edited {
-  background: rgba(0, 120, 212, 0.25) !important;
+tr.row-edited:hover td.cell-edited {
+  background: rgba(0, 120, 212, 0.35) !important;
+}
+
+td:has(.cell-edit-input) {
+  padding: 0;
 }
 
 .cell-edit-input {
   width: 100%;
-  padding: 2px 4px;
-  border: 1px solid var(--accent-color);
-  border-radius: 2px;
-  background: var(--bg-primary);
-  color: var(--text-primary);
-  font-family: "SF Mono", Monaco, Consolas, monospace;
-  font-size: 12px;
+  height: 100%;
+  padding: 6px 12px;
+  margin: 0;
+  border: none;
+  background: transparent;
+  color: inherit;
+  font-family: inherit;
+  font-size: inherit;
   outline: none;
-}
-
-.cell-edit-input:focus {
-  box-shadow: 0 0 0 2px rgba(0, 120, 212, 0.3);
 }
 
 .results-content .loading,

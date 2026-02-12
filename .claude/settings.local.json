@@ -16,7 +16,12 @@
       "Bash(cargo tree:*)",
       "Bash(cargo test:*)",
       "Bash(npm run typecheck:*)",
-      "Bash(npm run:*)"
+      "Bash(npm run:*)",
+      "Bash(pnpm test:*)",
+      "Bash(pnpm build:*)",
+      "Bash(npm test:*)",
+      "WebSearch",
+      "Bash(npx vitest run:*)"
     ]
   }
 }

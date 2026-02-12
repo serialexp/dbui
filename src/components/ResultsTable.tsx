@@ -73,6 +73,22 @@ export function ResultsTable(props: Props) {
 
   const isRowEdited = (rowIndex: number) => editedCells().has(rowIndex);
 
+  const toggleAllRows = () => {
+    const rows = displayRows();
+    const current = markedForDeletion();
+    const selectableIndices = rows
+      .map((_, i) => i)
+      .filter((i) => !isRowEdited(i));
+    const allSelected = selectableIndices.length > 0 &&
+      selectableIndices.every((i) => current.has(i));
+
+    if (allSelected) {
+      setMarkedForDeletion(new Set());
+    } else {
+      setMarkedForDeletion(new Set(selectableIndices));
+    }
+  };
+
   const toggleRowMarked = (rowIndex: number, shiftKey: boolean) => {
     const current = new Set(markedForDeletion());
     const lastRow = lastClickedRow();
@@ -316,7 +332,27 @@ export function ResultsTable(props: Props) {
                 <thead>
                   <tr>
                     <Show when={canDelete()}>
-                      <th class="delete-column"></th>
+                      <th class="delete-column">
+                        <input
+                          type="checkbox"
+                          checked={(() => {
+                            const rows = displayRows();
+                            const selectable = rows.filter((_, i) => !isRowEdited(i));
+                            return selectable.length > 0 && selectable.length === markedForDeletion().size;
+                          })()}
+                          ref={(el) => {
+                            createEffect(() => {
+                              const marked = markedForDeletion().size;
+                              const selectable = displayRows().filter((_, i) => !isRowEdited(i)).length;
+                              el.indeterminate = marked > 0 && marked < selectable;
+                            });
+                          }}
+                          onClick={(e) => {
+                            e.preventDefault();
+                            toggleAllRows();
+                          }}
+                        />
+                      </th>
                     </Show>
                     <For each={props.result!.columns}>
                       {(col) => <th>{col}</th>}
@@ -383,12 +419,12 @@ export function ResultsTable(props: Props) {
                               startEditing(rowIdx, cellIdx, cell);
                             };
 
-                            const displayValue = getCellDisplayValue(rowIdx, cellIdx, cell);
+                            const displayValue = () => getCellDisplayValue(rowIdx, cellIdx, cell);
 
                             return (
                               <td
                                 classList={{
-                                  "null": displayValue === null,
+                                  "null": displayValue() === null,
                                   "selected-cell": isSelected(),
                                   "cell-edited": isCellEdited(rowIdx, cellIdx),
                                 }}
@@ -397,7 +433,7 @@ export function ResultsTable(props: Props) {
                               >
                                 <Show
                                   when={isEditing()}
-                                  fallback={formatValue(displayValue)}
+                                  fallback={formatValue(displayValue())}
                                 >
                                   <input
                                     type="text"
@@ -414,7 +450,7 @@ export function ResultsTable(props: Props) {
                                       }
                                     }}
                                     onBlur={saveEdit}
-                                    ref={(el) => setTimeout(() => el?.focus(), 0)}
+                                    ref={(el) => setTimeout(() => { el?.focus(); el?.select(); }, 0)}
                                   />
                                 </Show>
                               </td>
