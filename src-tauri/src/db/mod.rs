@@ -335,15 +335,36 @@ impl ConnectionManager {
     }
 }
 
-async fn execute_query_pg(pool: &sqlx::PgPool, query: &str) -> Result<QueryResult, String> {
-    let rows = sqlx::query(query)
-        .fetch_all(pool)
-        .await
-        .map_err(|e| format!("Query failed: {}", e))?;
+/// Returns true if the query modifies data and won't return rows.
+/// Queries with RETURNING clauses are excluded since they produce result sets.
+fn is_dml(query: &str) -> bool {
+    let trimmed = query.trim();
+    let upper = trimmed.to_uppercase();
 
-    if rows.is_empty() {
-        // Query succeeded but returned no rows (e.g., DDL or DML with no RETURNING)
-        // Try to execute to get rows affected
+    if upper.contains("RETURNING") {
+        return false;
+    }
+
+    let first_word = upper
+        .split_whitespace()
+        .next()
+        .unwrap_or("");
+    matches!(
+        first_word,
+        "INSERT"
+            | "UPDATE"
+            | "DELETE"
+            | "CREATE"
+            | "ALTER"
+            | "DROP"
+            | "TRUNCATE"
+            | "GRANT"
+            | "REVOKE"
+    )
+}
+
+async fn execute_query_pg(pool: &sqlx::PgPool, query: &str) -> Result<QueryResult, String> {
+    if is_dml(query) {
         let result = sqlx::query(query)
             .execute(pool)
             .await
@@ -356,6 +377,20 @@ async fn execute_query_pg(pool: &sqlx::PgPool, query: &str) -> Result<QueryResul
             rows: vec![],
             row_count: 0,
             message: Some(format!("{} row(s) affected.", rows_affected)),
+        });
+    }
+
+    let rows = sqlx::query(query)
+        .fetch_all(pool)
+        .await
+        .map_err(|e| format!("Query failed: {}", e))?;
+
+    if rows.is_empty() {
+        return Ok(QueryResult {
+            columns: vec![],
+            rows: vec![],
+            row_count: 0,
+            message: Some("0 row(s) affected.".to_string()),
         });
     }
 
@@ -450,12 +485,7 @@ fn pg_value_to_json(
 }
 
 async fn execute_query_mysql(pool: &sqlx::MySqlPool, query: &str) -> Result<QueryResult, String> {
-    let rows = sqlx::query(query)
-        .fetch_all(pool)
-        .await
-        .map_err(|e| format!("Query failed: {}", e))?;
-
-    if rows.is_empty() {
+    if is_dml(query) {
         let result = sqlx::query(query)
             .execute(pool)
             .await
@@ -468,6 +498,20 @@ async fn execute_query_mysql(pool: &sqlx::MySqlPool, query: &str) -> Result<Quer
             rows: vec![],
             row_count: 0,
             message: Some(format!("{} row(s) affected.", rows_affected)),
+        });
+    }
+
+    let rows = sqlx::query(query)
+        .fetch_all(pool)
+        .await
+        .map_err(|e| format!("Query failed: {}", e))?;
+
+    if rows.is_empty() {
+        return Ok(QueryResult {
+            columns: vec![],
+            rows: vec![],
+            row_count: 0,
+            message: Some("0 row(s) affected.".to_string()),
         });
     }
 
@@ -531,12 +575,7 @@ fn mysql_value_to_json(
 }
 
 async fn execute_query_sqlite(pool: &sqlx::SqlitePool, query: &str) -> Result<QueryResult, String> {
-    let rows = sqlx::query(query)
-        .fetch_all(pool)
-        .await
-        .map_err(|e| format!("Query failed: {}", e))?;
-
-    if rows.is_empty() {
+    if is_dml(query) {
         let result = sqlx::query(query)
             .execute(pool)
             .await
@@ -549,6 +588,20 @@ async fn execute_query_sqlite(pool: &sqlx::SqlitePool, query: &str) -> Result<Qu
             rows: vec![],
             row_count: 0,
             message: Some(format!("{} row(s) affected.", rows_affected)),
+        });
+    }
+
+    let rows = sqlx::query(query)
+        .fetch_all(pool)
+        .await
+        .map_err(|e| format!("Query failed: {}", e))?;
+
+    if rows.is_empty() {
+        return Ok(QueryResult {
+            columns: vec![],
+            rows: vec![],
+            row_count: 0,
+            message: Some("0 row(s) affected.".to_string()),
         });
     }
 
