@@ -1,17 +1,17 @@
-// ABOUTME: Left sidebar containing connections and database object tree.
-// ABOUTME: Provides connection management and database navigation.
+// ABOUTME: Left sidebar with two sections: Databases list and Objects browser.
+// ABOUTME: Manages working contexts (connected databases) and object navigation.
 
-import { createSignal, Show, onMount, createEffect } from "solid-js";
+import { createSignal, Show, onMount } from "solid-js";
 import { Icon } from "./Icon";
-import { confirm } from "@tauri-apps/plugin-dialog";
-import type { ConnectionConfig, Category, MetadataView } from "../lib/types";
-import { listConnections, deleteConnection, listCategories } from "../lib/tauri";
-import { ConnectionForm } from "./ConnectionForm";
-import { ObjectTree } from "./ObjectTree";
-import { CategoryManager } from "./CategoryManager";
+import type { WorkingContext, Category, MetadataView } from "../lib/types";
+import { disconnect, listCategories, switchDatabase } from "../lib/tauri";
+import { DatabaseList } from "./DatabaseList";
+import { ObjectPanel } from "./ObjectPanel";
+import { ConnectDialog } from "./ConnectDialog";
+import { ConnectionManager } from "./ConnectionManager";
 import { CloudImportModal } from "./CloudImportModal";
+import { Toast } from "./Toast";
 
-import plusSvg from "@phosphor-icons/core/assets/regular/plus.svg?raw";
 import gearSvg from "@phosphor-icons/core/assets/regular/gear.svg?raw";
 import cloudArrowDownSvg from "@phosphor-icons/core/assets/regular/cloud-arrow-down.svg?raw";
 
@@ -27,22 +27,13 @@ interface Props {
 }
 
 export function Sidebar(props: Props) {
-  const [connections, setConnections] = createSignal<ConnectionConfig[]>([]);
+  const [contexts, setContexts] = createSignal<WorkingContext[]>([]);
   const [categories, setCategories] = createSignal<Category[]>([]);
-  const [showForm, setShowForm] = createSignal(false);
-  const [editingConnection, setEditingConnection] = createSignal<ConnectionConfig | null>(null);
-  const [showCategoryManager, setShowCategoryManager] = createSignal(false);
+  const [activeContextId, setActiveContextId] = createSignal<string | null>(null);
+  const [showConnectDialog, setShowConnectDialog] = createSignal(false);
+  const [showConnectionManager, setShowConnectionManager] = createSignal(false);
   const [showCloudImport, setShowCloudImport] = createSignal(false);
   const [error, setError] = createSignal<string | null>(null);
-
-  const loadConnections = async () => {
-    try {
-      const conns = await listConnections();
-      setConnections(conns);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
-    }
-  };
 
   const loadCategories = async () => {
     try {
@@ -53,77 +44,71 @@ export function Sidebar(props: Props) {
     }
   };
 
-  const loadAll = async () => {
-    await Promise.all([loadConnections(), loadCategories()]);
+  onMount(() => {
+    loadCategories();
+  });
+
+  const activeContext = (): WorkingContext | null => {
+    const id = activeContextId();
+    if (!id) return null;
+    return contexts().find((c) => c.id === id) || null;
   };
 
-  onMount(() => {
-    loadAll();
-  });
-
-  // Report category color changes to parent
-  createEffect(() => {
-    if (!props.onCategoryColorChange) return;
-
-    const connId = props.activeConnectionId;
-    if (!connId) {
-      props.onCategoryColorChange(null);
-      return;
-    }
-
-    const conn = connections().find(c => c.id === connId);
-    if (!conn?.category_id) {
-      props.onCategoryColorChange(null);
-      return;
-    }
-
-    const category = categories().find(c => c.id === conn.category_id);
-    props.onCategoryColorChange(category?.color || null);
-  });
-
-  const handleDelete = async (id: string, e: Event) => {
-    console.log("handleDelete called with id:", id);
-    e.stopPropagation();
-
-    const confirmed = await confirm("Delete this connection?", {
-      title: "Confirm Delete",
-      kind: "warning",
-    });
-
-    if (!confirmed) return;
+  const handleContextSelect = async (ctx: WorkingContext) => {
+    setActiveContextId(ctx.id);
 
     try {
-      console.log("Deleting connection:", id);
-      await deleteConnection(id);
-      console.log("Reloading connections");
-      await loadConnections();
-      if (props.activeConnectionId === id) {
-        props.onConnectionChange(null);
-      }
+      await switchDatabase(ctx.connectionId, ctx.database);
     } catch (err) {
-      console.error("Delete error:", err);
       setError(err instanceof Error ? err.message : String(err));
+    }
+
+    props.onConnectionChange(ctx.connectionId);
+    props.onDatabaseSwitch(ctx.database, ctx.schema || null);
+    props.onCategoryColorChange?.(ctx.categoryColor);
+  };
+
+  const handleDisconnect = async (ctx: WorkingContext) => {
+    try {
+      await disconnect(ctx.connectionId);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    }
+
+    // Remove all contexts for this connection
+    setContexts((prev) => prev.filter((c) => c.connectionId !== ctx.connectionId));
+
+    // Clear active if it was from this connection
+    const active = activeContext();
+    if (active && active.connectionId === ctx.connectionId) {
+      setActiveContextId(null);
+      props.onConnectionChange(null);
+      props.onCategoryColorChange?.(null);
     }
   };
 
-  const handleEdit = (connection: ConnectionConfig) => {
-    setEditingConnection(connection);
+  const handleContextsAdded = (newContexts: WorkingContext[]) => {
+    setContexts((prev) => [...prev, ...newContexts]);
+
+    // Auto-select the first new context if nothing is selected
+    if (!activeContextId() && newContexts.length > 0) {
+      handleContextSelect(newContexts[0]);
+    }
   };
 
-  const handleCloseForm = () => {
-    setShowForm(false);
-    setEditingConnection(null);
+  const handleConnectionsChange = () => {
+    loadCategories();
   };
 
   return (
     <aside class="sidebar">
       <div class="sidebar-header">
-        <h2>Connections</h2>
+        <h2>Databases</h2>
         <div class="sidebar-header-actions">
           <button
             class="sidebar-icon-btn"
-            onClick={() => setShowCategoryManager(true)}
-            title="Manage Categories"
+            onClick={() => setShowConnectionManager(true)}
+            title="Connection Manager"
           >
             <Icon svg={gearSvg} size={16} />
           </button>
@@ -134,43 +119,42 @@ export function Sidebar(props: Props) {
           >
             <Icon svg={cloudArrowDownSvg} size={16} />
           </button>
-          <button class="add-btn" onClick={() => setShowForm(true)}>
-            <Icon svg={plusSvg} size={16} />
-          </button>
         </div>
       </div>
 
       <Show when={error()}>
-        <div class="error">{error()}</div>
+        <Toast message={error()!} type="error" onDismiss={() => setError(null)} />
       </Show>
 
-      <ObjectTree
-        connections={connections()}
+      <DatabaseList
+        contexts={contexts()}
         categories={categories()}
-        activeConnectionId={props.activeConnectionId}
-        onConnectionChange={props.onConnectionChange}
-        onDatabaseSwitch={props.onDatabaseSwitch}
-        onTableSelect={props.onTableSelect}
-        onQueryGenerate={props.onQueryGenerate}
-        onEdit={handleEdit}
-        onDelete={handleDelete}
-        onMetadataSelect={props.onMetadataSelect}
-        onFunctionSelect={props.onFunctionSelect}
+        activeContextId={activeContextId()}
+        onContextSelect={handleContextSelect}
+        onDisconnect={handleDisconnect}
+        onConnectClick={() => setShowConnectDialog(true)}
       />
 
-      <Show when={showForm() || editingConnection()}>
-        <ConnectionForm
-          categories={categories()}
-          connection={editingConnection() || undefined}
-          onClose={handleCloseForm}
-          onSaved={loadConnections}
+      <ObjectPanel
+        context={activeContext()}
+        onTableSelect={props.onTableSelect}
+        onFunctionSelect={props.onFunctionSelect}
+        onMetadataSelect={props.onMetadataSelect}
+        onQueryGenerate={props.onQueryGenerate}
+      />
+
+      <Show when={showConnectDialog()}>
+        <ConnectDialog
+          existingContexts={contexts()}
+          onContextsAdded={handleContextsAdded}
+          onClose={() => setShowConnectDialog(false)}
         />
       </Show>
 
-      <Show when={showCategoryManager()}>
-        <CategoryManager
-          onClose={() => setShowCategoryManager(false)}
-          onCategoriesChange={loadAll}
+      <Show when={showConnectionManager()}>
+        <ConnectionManager
+          onClose={() => setShowConnectionManager(false)}
+          onConnectionsChange={handleConnectionsChange}
         />
       </Show>
 
@@ -178,7 +162,7 @@ export function Sidebar(props: Props) {
         <CloudImportModal
           categories={categories()}
           onClose={() => setShowCloudImport(false)}
-          onSaved={loadConnections}
+          onSaved={handleConnectionsChange}
         />
       </Show>
     </aside>

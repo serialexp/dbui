@@ -98,132 +98,96 @@ body {
   background: var(--accent-hover);
 }
 
-/* Object Tree */
-.object-tree {
-  flex: 1;
-  overflow: auto;
-  padding: 8px 0;
+/* Database List */
+.database-list {
+  flex: 35 0 0;
+  overflow-y: auto;
+  padding: 4px 0;
   scrollbar-width: thin;
   scrollbar-color: var(--bg-hover) var(--bg-secondary);
 }
 
-/* Webkit scrollbar styling for object-tree */
-.object-tree::-webkit-scrollbar {
+.database-list::-webkit-scrollbar {
   width: 8px;
 }
 
-.object-tree::-webkit-scrollbar-track {
+.database-list::-webkit-scrollbar-track {
   background: var(--bg-secondary);
 }
 
-.object-tree::-webkit-scrollbar-thumb {
+.database-list::-webkit-scrollbar-thumb {
   background: var(--bg-hover);
   border-radius: 4px;
 }
 
-.object-tree::-webkit-scrollbar-thumb:hover {
+.database-list::-webkit-scrollbar-thumb:hover {
   background: var(--border-color);
 }
 
-.tree-node {
-  -webkit-user-select: none;
-  user-select: none;
+.database-list-empty {
+  padding: 16px 12px;
+  text-align: center;
+  color: var(--text-muted);
+  font-size: 12px;
 }
 
-.tree-node-content {
+.db-category-group {
+  margin-bottom: 2px;
+}
+
+.db-category-label {
   display: flex;
   align-items: center;
-  padding: 4px 8px 4px 0;
-  cursor: pointer;
-  gap: 4px;
+  gap: 6px;
+  padding: 4px 12px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
 }
 
-.tree-node-content:hover {
+.db-category-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.db-entry {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 12px 5px 16px;
+  cursor: pointer;
+  font-size: 12px;
+  color: var(--text-tertiary);
+  border-left: 3px solid transparent;
+  transition: background 0.1s;
+}
+
+.db-entry:hover {
   background: var(--bg-hover);
 }
 
-.tree-icon {
-  width: 16px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: var(--text-secondary);
+.db-entry.active {
+  background: var(--bg-tertiary);
+  color: var(--text-primary);
+  font-weight: 500;
+}
+
+.db-entry-icon {
   flex-shrink: 0;
 }
 
-.tree-node-icon {
-  width: 16px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: var(--text-secondary);
-  flex-shrink: 0;
-}
-
-.tree-label {
+.db-entry-label {
   flex: 1;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.tree-node-content.connection .tree-label {
-  font-weight: 500;
-}
-
-.tree-node-content.database .tree-label,
-.tree-node-content.schema .tree-label,
-.tree-node-content.tables .tree-label,
-.tree-node-content.views .tree-label,
-.tree-node-content.functions .tree-label,
-.tree-node-content.table .tree-label,
-.tree-node-content.view .tree-label,
-.tree-node-content.function .tree-label {
-  color: var(--text-tertiary);
-  font-size: 12px;
-}
-
-.tree-node-content.data,
-.tree-node-content.column,
-.tree-node-content.index,
-.tree-node-content.constraint {
-  cursor: pointer;
-}
-
-.tree-node-content.empty {
-  cursor: default;
-  opacity: 0.5;
-}
-
-.tree-node-content.empty:hover {
-  background: transparent;
-}
-
-.tree-node-content.empty .tree-label {
-  color: var(--text-secondary);
-  font-size: 12px;
-  font-style: italic;
-}
-
-.tree-node-content.data .tree-label,
-.tree-node-content.columns .tree-label,
-.tree-node-content.indexes .tree-label,
-.tree-node-content.constraints .tree-label {
-  color: var(--text-primary);
-  font-size: 12px;
-}
-
-.tree-node-content.column .tree-label,
-.tree-node-content.index .tree-label,
-.tree-node-content.constraint .tree-label {
-  font-family: "SF Mono", Monaco, Consolas, monospace;
-  font-size: 12px;
-}
-
-.reload-btn,
-.disconnect-btn,
-.edit-btn,
-.delete-btn {
+.db-entry-disconnect {
   width: 18px;
   height: 18px;
   border: none;
@@ -237,26 +201,739 @@ body {
   align-items: center;
   justify-content: center;
   padding: 0;
-  pointer-events: auto;
 }
 
-.tree-node-content:hover .reload-btn,
-.tree-node-content:hover .disconnect-btn,
-.tree-node-content:hover .edit-btn,
-.tree-node-content:hover .delete-btn {
+.db-entry:hover .db-entry-disconnect {
   opacity: 1;
 }
 
-.delete-btn:hover {
+.db-entry-disconnect:hover {
+  background: var(--accent-color);
+  color: white;
+}
+
+.connect-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  width: calc(100% - 24px);
+  margin: 8px 12px;
+  padding: 6px 12px;
+  background: transparent;
+  border: 1px dashed var(--border-color);
+  color: var(--text-secondary);
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 12px;
+}
+
+.connect-btn:hover {
+  border-color: var(--accent-color);
+  color: var(--accent-color);
+}
+
+/* Object Panel */
+.object-panel {
+  flex: 65 0 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  border-top: 1px solid var(--border-color);
+}
+
+.object-panel-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 6px 12px;
+  border-bottom: 1px solid var(--border-color);
+}
+
+.object-panel-title {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+}
+
+.object-reload-btn {
+  width: 20px;
+  height: 20px;
+  border: none;
+  background: transparent;
+  color: var(--text-secondary);
+  cursor: pointer;
+  border-radius: 2px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+}
+
+.object-reload-btn:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+
+.object-tabs {
+  display: flex;
+  border-bottom: 1px solid var(--border-color);
+}
+
+.object-tab {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 6px 10px;
+  background: transparent;
+  border: none;
+  border-bottom: 2px solid transparent;
+  color: var(--text-secondary);
+  cursor: pointer;
+  font-size: 11px;
+  white-space: nowrap;
+}
+
+.object-tab:hover {
+  color: var(--text-primary);
+}
+
+.object-tab.active {
+  color: var(--text-primary);
+  border-bottom-color: var(--accent-color);
+}
+
+.object-tab-count {
+  color: var(--text-muted);
+  font-size: 10px;
+}
+
+.object-list {
+  flex: 1;
+  overflow-y: auto;
+  padding: 2px 0;
+  scrollbar-width: thin;
+  scrollbar-color: var(--bg-hover) var(--bg-secondary);
+}
+
+.object-list::-webkit-scrollbar {
+  width: 8px;
+}
+
+.object-list::-webkit-scrollbar-track {
+  background: var(--bg-secondary);
+}
+
+.object-list::-webkit-scrollbar-thumb {
+  background: var(--bg-hover);
+  border-radius: 4px;
+}
+
+.object-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 12px;
+  cursor: pointer;
+  font-size: 12px;
+  color: var(--text-tertiary);
+}
+
+.object-item:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+
+.object-item-icon {
+  flex-shrink: 0;
+  color: var(--text-secondary);
+}
+
+.object-item-label {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-family: "SF Mono", Monaco, Consolas, monospace;
+  font-size: 12px;
+}
+
+.object-empty {
+  padding: 16px 12px;
+  text-align: center;
+  color: var(--text-muted);
+  font-size: 12px;
+}
+
+.object-error {
+  padding: 8px 12px;
+  color: var(--error-color);
+  font-size: 12px;
+}
+
+/* Connect Dialog */
+.connect-dialog {
+  width: 480px;
+  max-height: 80vh;
+  display: flex;
+  flex-direction: column;
+  padding: 0;
+}
+
+.connect-dialog .modal-header {
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--border-color);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.connect-dialog .modal-header h2 {
+  margin: 0;
+  font-size: 16px;
+}
+
+.connect-dialog-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.connect-dialog-back {
+  padding: 4px;
+  background: transparent;
+  border: none;
+  color: var(--text-secondary);
+  cursor: pointer;
+  border-radius: 4px;
+  display: flex;
+  align-items: center;
+}
+
+.connect-dialog-back:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+
+.connect-dialog-error {
+  padding: 8px 20px;
+  color: var(--error-color);
+  font-size: 12px;
+}
+
+.connect-dialog-loading {
+  padding: 24px 20px;
+  text-align: center;
+  color: var(--text-secondary);
+  font-size: 13px;
+}
+
+.connect-dialog-list {
+  flex: 1;
+  overflow-y: auto;
+  max-height: 400px;
+}
+
+.connect-dialog-empty {
+  padding: 24px 20px;
+  text-align: center;
+  color: var(--text-muted);
+  font-size: 12px;
+}
+
+.connect-dialog-category {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 20px 4px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+}
+
+.connect-dialog-entry {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 20px;
+  cursor: pointer;
+  border-bottom: 1px solid var(--border-color);
+}
+
+.connect-dialog-entry:hover {
+  background: var(--bg-hover);
+}
+
+.connect-dialog-entry:last-child {
+  border-bottom: none;
+}
+
+.connect-dialog-entry-info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.connect-dialog-entry-name {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-primary);
+}
+
+.connect-dialog-entry-detail {
+  font-size: 11px;
+  color: var(--text-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.connect-dialog-select {
+  flex: 1;
+  overflow-y: auto;
+  max-height: 400px;
+}
+
+.connect-dialog-select-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 20px;
+  border-bottom: 1px solid var(--border-color);
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+.connect-dialog-select-all {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+}
+
+.connect-dialog-select-count {
+  color: var(--text-muted);
+  font-size: 11px;
+}
+
+.connect-dialog-entries {
+  padding: 4px 0;
+}
+
+.connect-dialog-db-group {
+  border-bottom: 1px solid var(--border-color);
+}
+
+.connect-dialog-db-group:last-child {
+  border-bottom: none;
+}
+
+.connect-dialog-db-header {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  padding: 8px 20px 4px;
+}
+
+.connect-dialog-db-name {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-primary);
+}
+
+.connect-dialog-db-toggle {
+  background: none;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+.connect-dialog-db-toggle:hover {
+  color: var(--text-secondary);
+}
+
+.connect-dialog-schema-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 12px;
+  padding: 4px 20px 10px 44px;
+}
+
+.connect-dialog-schema-check {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  cursor: pointer;
+  font-size: 12px;
+  color: var(--text-tertiary);
+  padding: 2px 6px;
+  border-radius: 3px;
+}
+
+.connect-dialog-schema-check:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+
+.connect-dialog-schema-check.disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.connect-dialog-already {
+  font-size: 10px;
+  color: var(--text-muted);
+  margin-left: auto;
+}
+
+.connect-dialog-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  padding: 12px 20px;
+  border-top: 1px solid var(--border-color);
+}
+
+.connect-dialog-actions button {
+  padding: 6px 16px;
+  border: 1px solid var(--border-color);
+  background: transparent;
+  color: var(--text-primary);
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 12px;
+}
+
+.connect-dialog-actions button.primary {
+  background: var(--accent-color);
+  border-color: var(--accent-color);
+  color: white;
+}
+
+.connect-dialog-actions button.primary:hover:not(:disabled) {
+  background: var(--accent-hover);
+}
+
+.connect-dialog-actions button.primary:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* Connection Manager */
+.connection-manager-modal {
+  width: 560px;
+  height: 80vh;
+  display: flex;
+  flex-direction: column;
+  padding: 0;
+}
+
+.connection-manager-modal .modal-header {
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--border-color);
+}
+
+.connection-manager-modal .modal-header h2 {
+  margin: 0;
+}
+
+.manager-tabs {
+  display: flex;
+  border-bottom: 1px solid var(--border-color);
+}
+
+.manager-tab {
+  padding: 10px 20px;
+  background: transparent;
+  border: none;
+  border-bottom: 2px solid transparent;
+  color: var(--text-secondary);
+  cursor: pointer;
+  font-size: 13px;
+}
+
+.manager-tab:hover {
+  color: var(--text-primary);
+}
+
+.manager-tab.active {
+  color: var(--text-primary);
+  border-bottom-color: var(--accent-color);
+}
+
+.manager-tab-content {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.manager-connection-list {
+  flex: 1;
+  overflow-y: auto;
+}
+
+.manager-connection-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 20px;
+  border-bottom: 1px solid var(--border-color);
+  border-left: 3px solid transparent;
+}
+
+.manager-connection-item:last-child {
+  border-bottom: none;
+}
+
+.manager-connection-info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  flex: 1;
+  min-width: 0;
+}
+
+.manager-connection-name {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-primary);
+}
+
+.manager-connection-detail {
+  font-size: 11px;
+  color: var(--text-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.manager-connection-actions {
+  display: flex;
+  gap: 4px;
+}
+
+.manager-action-btn {
+  width: 24px;
+  height: 24px;
+  border: none;
+  background: transparent;
+  color: var(--text-secondary);
+  cursor: pointer;
+  border-radius: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+}
+
+.manager-action-btn:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+
+.manager-action-btn.delete:hover {
   background: var(--error-color);
   color: white;
 }
 
-.reload-btn:hover,
-.disconnect-btn:hover,
-.edit-btn:hover {
+.manager-empty {
+  padding: 24px 20px;
+  text-align: center;
+  color: var(--text-muted);
+  font-size: 12px;
+}
+
+.manager-footer {
+  padding: 12px 20px;
+  border-top: 1px solid var(--border-color);
+}
+
+.manager-add-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 16px;
+  background: var(--accent-color);
+  border: none;
+  color: white;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 12px;
+  width: 100%;
+  justify-content: center;
+}
+
+.manager-add-btn:hover {
+  background: var(--accent-hover);
+}
+
+.manager-categories-embed {
+  flex: 1;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+}
+
+.manager-categories-embed .modal-overlay {
+  position: static;
+  background: none;
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+}
+
+.manager-categories-embed .modal {
+  border: none;
+  border-radius: 0;
+  box-shadow: none;
+  max-width: none;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+}
+
+.manager-categories-embed .modal-header {
+  display: none;
+}
+
+/* Restyle category items to match connection item rows */
+.manager-categories-embed .category-list {
+  max-height: none;
+  padding: 0;
+  gap: 0;
+  flex: 1;
+}
+
+.manager-categories-embed .category-item {
+  background: none;
+  border: none;
+  border-radius: 0;
+  border-bottom: 1px solid var(--border-color);
+  padding: 0;
+}
+
+.manager-categories-embed .category-display-row {
+  padding: 10px 20px;
+  gap: 10px;
+  flex-wrap: nowrap;
+}
+
+.manager-categories-embed .color-swatch {
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+}
+
+.manager-categories-embed .category-name {
+  font-size: 13px;
+}
+
+.manager-categories-embed .category-actions {
+  gap: 4px;
+}
+
+.manager-categories-embed .category-action-btn {
+  width: 24px;
+  height: 24px;
+}
+
+.manager-categories-embed .category-edit-row {
+  padding: 10px 20px;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.manager-categories-embed .category-add-form {
+  padding: 10px 20px;
+}
+
+.manager-categories-embed .category-add-form .category-edit-row {
+  background: none;
+  border: none;
+  border-radius: 0;
+  padding: 0;
+  gap: 10px;
+}
+
+.manager-categories-embed .category-empty {
+  padding: 24px 20px;
+  font-size: 12px;
+}
+
+.manager-categories-embed .category-footer {
+  padding: 12px 20px;
+}
+
+.manager-categories-embed .add-category-btn {
+  width: 100%;
+  justify-content: center;
+  font-size: 12px;
+}
+
+/* Toast */
+.toast {
+  position: fixed;
+  bottom: 24px;
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 8px 16px;
+  border-radius: 6px;
+  font-size: 13px;
+  z-index: 1000;
+  cursor: pointer;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
+}
+
+.toast-error {
+  background: var(--error-color);
+  color: white;
+}
+
+.toast-success {
+  background: var(--success-color);
+  color: var(--bg-primary);
+}
+
+.toast-info {
   background: var(--accent-color);
   color: white;
+}
+
+/* Context Menu */
+.context-menu {
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: 4px;
+  padding: 4px 0;
+  min-width: 160px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+  z-index: 200;
+}
+
+.context-menu-item {
+  padding: 6px 12px;
+  cursor: pointer;
+  font-size: 12px;
+  color: var(--text-primary);
+}
+
+.context-menu-item:hover {
+  background: var(--accent-color);
+  color: white;
+}
+
+/* Create Name Dialog */
+.create-name-dialog {
+  width: 320px;
 }
 
 /* Main Content */
@@ -652,20 +1329,22 @@ tr.row-edited:hover td.cell-edited {
 }
 
 td:has(.cell-edit-input) {
-  padding: 0;
+  position: relative;
+  color: transparent;
 }
 
 .cell-edit-input {
+  position: absolute;
+  inset: 0;
   width: 100%;
-  height: 100%;
   padding: 6px 12px;
   margin: 0;
   border: none;
-  background: transparent;
-  color: inherit;
+  background: var(--bg-primary);
+  color: var(--text-primary);
   font-family: inherit;
   font-size: inherit;
-  outline: none;
+  outline: 1px solid var(--accent-color);
 }
 
 .results-content .loading,
@@ -1915,17 +2594,6 @@ td:has(.cell-edit-input) {
   height: 20px;
   border-radius: 4px;
   flex-shrink: 0;
-}
-
-/* Category Tree Node */
-.tree-node-content.category {
-  font-weight: 600;
-  font-size: 12px;
-  margin-left: 3px;
-}
-
-.tree-node-content.category .tree-label {
-  color: var(--text-primary);
 }
 
 /* Cloud Import Modal */
