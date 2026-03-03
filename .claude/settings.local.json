@@ -21,7 +21,14 @@
       "Bash(pnpm build:*)",
       "Bash(npm test:*)",
       "WebSearch",
-      "Bash(npx vitest run:*)"
+      "Bash(npx vitest run:*)",
+      "Bash(npm ls:*)",
+      "Bash(npm install:*)",
+      "Bash(pnpm install:*)",
+      "Bash(git push:*)",
+      "Bash(cd /Users/bart.riepe/Projects/dbui/src-tauri && cargo add tauri-plugin-clipboard-manager 2>&1)",
+      "Bash(npx tsc:*)",
+      "Bash(npx vite:*)"
     ]
   }
 }
