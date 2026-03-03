@@ -110,13 +110,7 @@ pub fn add_connection(
 
 pub fn remove_connection(config_dir: &Path, id: &str) -> Result<(), String> {
     let mut connections = load_connections(config_dir);
-    let original_len = connections.len();
     connections.retain(|c| c.id != id);
-
-    if connections.len() == original_len {
-        return Err(format!("Connection with id '{}' not found", id));
-    }
-
     save_connections(config_dir, &connections)
 }
 

@@ -17,6 +17,7 @@ pub fn run() {
         .expect("Failed to install rustls crypto provider");
 
     tauri::Builder::default()
+        .plugin(tauri_plugin_clipboard_manager::init())
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_opener::init())
         .invoke_handler(tauri::generate_handler![
@@ -30,6 +31,8 @@ pub fn run() {
             switch_database,
             list_databases,
             list_schemas,
+            create_database,
+            create_schema,
             list_tables,
             list_views,
             list_functions,
