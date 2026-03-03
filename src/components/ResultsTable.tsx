@@ -5,6 +5,8 @@ import { createSignal, createEffect, onCleanup, For, Show } from "solid-js";
 import type { QueryResult, CellSelection, TableContext, DatabaseType } from "../lib/types";
 import type { RowEdit } from "../lib/updateQueryGenerator";
 import { exportAsJson, exportAsSqlInsert } from "../lib/resultExporter";
+import { readText } from "@tauri-apps/plugin-clipboard-manager";
+import { ContextMenu, type ContextMenuItem } from "./ContextMenu";
 import { Icon } from "./Icon";
 import arrowRightSvg from "@phosphor-icons/core/assets/regular/arrow-right.svg?raw";
 import trashSvg from "@phosphor-icons/core/assets/regular/trash.svg?raw";
@@ -23,6 +25,7 @@ interface Props {
   onGenerateDelete?: (rowIndices: number[]) => void;
   onGenerateUpdate?: (edits: RowEdit[]) => void;
   onPendingChangesChange?: (hasPending: boolean) => void;
+  onFilterByValue?: (columnName: string, value: unknown) => void;
   dbType?: DatabaseType | null;
 }
 
@@ -37,6 +40,11 @@ export function ResultsTable(props: Props) {
   const [lastClickedRow, setLastClickedRow] = createSignal<number | null>(null);
   const [exportMenuOpen, setExportMenuOpen] = createSignal(false);
   const [exportFeedback, setExportFeedback] = createSignal<string | null>(null);
+  const [cellContextMenu, setCellContextMenu] = createSignal<{
+    x: number;
+    y: number;
+    items: ContextMenuItem[];
+  } | null>(null);
   let exportDropdownRef: HTMLDivElement | undefined;
 
   const handleClickOutside = (e: MouseEvent) => {
@@ -258,6 +266,64 @@ export function ResultsTable(props: Props) {
     }
   };
 
+  const formatFilterPreview = (value: unknown): string => {
+    if (value === null || value === undefined) return "NULL";
+    if (typeof value === "number" || typeof value === "boolean") return String(value);
+    const str = String(value);
+    if (str.length > 20) return `'${str.slice(0, 20)}...'`;
+    return `'${str}'`;
+  };
+
+  const handleCellContextMenu = (
+    e: MouseEvent,
+    columnName: string,
+    cellValue: unknown,
+  ) => {
+    e.preventDefault();
+    if (!props.onFilterByValue) return;
+
+    const colDisplay = columnName.length > 15 ? columnName.slice(0, 15) + "..." : columnName;
+    const cellPreview = formatFilterPreview(cellValue);
+    const isNull = cellValue === null || cellValue === undefined;
+
+    const items: ContextMenuItem[] = [
+      {
+        label: `Filter '${colDisplay}' ${isNull ? "IS" : "="} ${cellPreview}`,
+        action: () => props.onFilterByValue!(columnName, cellValue),
+      },
+    ];
+
+    // Show menu immediately, then try to add clipboard item async
+    setCellContextMenu({ x: e.clientX, y: e.clientY, items });
+
+    readText().then((clipText) => {
+      if (clipText !== undefined && clipText !== null && clipText !== "") {
+        const clipPreview = clipText.length > 20 ? `'${clipText.slice(0, 20)}...'` : `'${clipText}'`;
+        setCellContextMenu((prev) => prev ? {
+          ...prev,
+          items: [
+            ...prev.items,
+            {
+              label: `Filter '${colDisplay}' = ${clipPreview}`,
+              action: () => props.onFilterByValue!(columnName, clipText),
+            },
+          ],
+        } : null);
+      }
+    }).catch((err) => {
+      setCellContextMenu((prev) => prev ? {
+        ...prev,
+        items: [
+          ...prev.items,
+          {
+            label: `Clipboard unavailable: ${String(err).slice(0, 30)}`,
+            action: () => {},
+          },
+        ],
+      } : null);
+    });
+  };
+
   return (
     <div class="results-table">
       <div class="results-header">
@@ -430,11 +496,15 @@ export function ResultsTable(props: Props) {
                                 }}
                                 onClick={handleClick}
                                 onDblClick={handleDoubleClick}
+                                onContextMenu={(e) => {
+                                  const columns = props.result?.columns;
+                                  if (columns) {
+                                    handleCellContextMenu(e, columns[cellIdx], displayValue());
+                                  }
+                                }}
                               >
-                                <Show
-                                  when={isEditing()}
-                                  fallback={formatValue(displayValue())}
-                                >
+                                {formatValue(displayValue())}
+                                <Show when={isEditing()}>
                                   <input
                                     type="text"
                                     class="cell-edit-input"
@@ -485,6 +555,15 @@ export function ResultsTable(props: Props) {
           <div class="empty">Run a query to see results</div>
         </Show>
       </div>
+
+      <Show when={cellContextMenu()}>
+        <ContextMenu
+          x={cellContextMenu()!.x}
+          y={cellContextMenu()!.y}
+          items={cellContextMenu()!.items}
+          onClose={() => setCellContextMenu(null)}
+        />
+      </Show>
     </div>
   );
 }

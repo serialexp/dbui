@@ -359,6 +359,32 @@ function AppContent() {
     }
   };
 
+  const handleFilterByValue = (columnName: string, value: unknown) => {
+    const tab = activeTab();
+    if (!tab) return;
+
+    const ctx = tab.tableContext;
+    let condition: string;
+    if (value === null || value === undefined) {
+      condition = `${columnName} IS NULL`;
+    } else if (typeof value === "number" || typeof value === "boolean") {
+      condition = `${columnName} = ${value}`;
+    } else {
+      const escaped = String(value).replace(/'/g, "''");
+      condition = `${columnName} = '${escaped}'`;
+    }
+
+    let query: string;
+    if (ctx) {
+      query = `SELECT * FROM ${ctx.schema}.${ctx.table} WHERE ${condition} LIMIT 100;`;
+      updateActiveTab({ query });
+      handleExecute(query, true);
+    } else {
+      query = `-- Add table name: SELECT * FROM <table> WHERE ${condition} LIMIT 100;`;
+      updateActiveTab({ query });
+    }
+  };
+
   const handleCloseWithPending = async (_tabId: string): Promise<boolean> => {
     return await confirm(
       "This tab has pending edits that will be lost. Close anyway?",
@@ -470,6 +496,7 @@ function AppContent() {
                   primaryKeyColumns={tab()!.primaryKeyColumns}
                   onGenerateDelete={handleGenerateDelete}
                   onGenerateUpdate={handleGenerateUpdate}
+                  onFilterByValue={handleFilterByValue}
                   onPendingChangesChange={(p) =>
                     updateActiveTab({ hasPendingChanges: p })
                   }
