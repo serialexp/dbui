@@ -95,40 +95,6 @@ export interface QueryResult {
   message: string | null;
 }
 
-export interface TreeNode {
-  id: string;
-  label: string;
-  type:
-    | "category"
-    | "connection"
-    | "database"
-    | "schema"
-    | "tables"
-    | "table"
-    | "views"
-    | "view"
-    | "functions"
-    | "function"
-    | "data"
-    | "columns"
-    | "column"
-    | "indexes"
-    | "index"
-    | "constraints"
-    | "constraint"
-    | "empty"
-    | "more-databases"
-    | "redis-keys"
-    | "redis-lists"
-    | "redis-hashes"
-    | "redis-sets"
-    | "redis-sorted-sets";
-  children?: TreeNode[];
-  expanded?: boolean;
-  loading?: boolean;
-  metadata?: Record<string, unknown>;
-}
-
 export interface CellSelection {
   rowIndex: number;
   columnIndex: number;
@@ -223,3 +189,16 @@ export interface TableContext {
   schema: string;
   table: string;
 }
+
+export interface WorkingContext {
+  id: string;
+  connectionId: string;
+  connectionName: string;
+  dbType: DatabaseType;
+  database: string;
+  schema: string;
+  categoryId: string | null;
+  categoryColor: string | null;
+}
+
+export type ObjectTab = "tables" | "views" | "functions";

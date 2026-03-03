@@ -76,6 +76,20 @@ export async function listSchemas(
   return invoke("list_schemas", { connectionId, database });
 }
 
+export async function createDatabase(
+  connectionId: string,
+  name: string
+): Promise<void> {
+  return invoke("create_database", { connectionId, name });
+}
+
+export async function createSchema(
+  connectionId: string,
+  name: string
+): Promise<void> {
+  return invoke("create_schema", { connectionId, name });
+}
+
 export async function listTables(
   connectionId: string,
   database: string,
