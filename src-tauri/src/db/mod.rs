@@ -169,6 +169,32 @@ impl ConnectionManager {
             .ok_or_else(|| format!("Connection '{}' not found or not connected", connection_id))
     }
 
+    pub async fn create_database(&self, connection_id: &str, name: &str) -> Result<(), String> {
+        let pool = self.get_pool(connection_id).await?;
+        match pool.as_ref() {
+            ConnectionPool::Postgres(p) => postgres::create_database(p, name).await,
+            ConnectionPool::Mysql(p) => mysql::create_database(p, name).await,
+            ConnectionPool::Sqlite(_) => Err("SQLite does not support CREATE DATABASE".to_string()),
+            ConnectionPool::Redis(_) => Err("Redis does not support CREATE DATABASE".to_string()),
+        }
+    }
+
+    pub async fn create_schema(&self, connection_id: &str, name: &str) -> Result<(), String> {
+        let pool = self.get_pool(connection_id).await?;
+        match pool.as_ref() {
+            ConnectionPool::Postgres(p) => postgres::create_schema(p, name).await,
+            ConnectionPool::Mysql(_) => {
+                Err("MySQL does not support CREATE SCHEMA separately from CREATE DATABASE".to_string())
+            }
+            ConnectionPool::Sqlite(_) => {
+                Err("SQLite does not support CREATE SCHEMA".to_string())
+            }
+            ConnectionPool::Redis(_) => {
+                Err("Redis does not support CREATE SCHEMA".to_string())
+            }
+        }
+    }
+
     pub async fn list_databases(&self, connection_id: &str) -> Result<Vec<String>, String> {
         let pool = self.get_pool(connection_id).await?;
         match pool.as_ref() {

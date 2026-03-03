@@ -207,6 +207,30 @@ pub async fn list_indexes(
         .collect())
 }
 
+pub async fn create_database(pool: &sqlx::PgPool, name: &str) -> Result<(), String> {
+    if name.is_empty() || name.contains('"') || name.contains('\0') {
+        return Err("Invalid database name".to_string());
+    }
+    let query = format!("CREATE DATABASE \"{}\"", name);
+    sqlx::query(&query)
+        .execute(pool)
+        .await
+        .map_err(|e| format!("Failed to create database: {}", e))?;
+    Ok(())
+}
+
+pub async fn create_schema(pool: &sqlx::PgPool, name: &str) -> Result<(), String> {
+    if name.is_empty() || name.contains('"') || name.contains('\0') {
+        return Err("Invalid schema name".to_string());
+    }
+    let query = format!("CREATE SCHEMA \"{}\"", name);
+    sqlx::query(&query)
+        .execute(pool)
+        .await
+        .map_err(|e| format!("Failed to create schema: {}", e))?;
+    Ok(())
+}
+
 pub async fn list_constraints(
     pool: &sqlx::PgPool,
     _database: &str,

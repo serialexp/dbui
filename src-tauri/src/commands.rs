@@ -168,6 +168,16 @@ pub async fn switch_database(app: tauri::AppHandle, connection_id: String, datab
 }
 
 #[tauri::command]
+pub async fn create_database(connection_id: String, name: String) -> Result<(), String> {
+    get_manager().create_database(&connection_id, &name).await
+}
+
+#[tauri::command]
+pub async fn create_schema(connection_id: String, name: String) -> Result<(), String> {
+    get_manager().create_schema(&connection_id, &name).await
+}
+
+#[tauri::command]
 pub async fn list_databases(connection_id: String) -> Result<Vec<String>, String> {
     get_manager().list_databases(&connection_id).await
 }
