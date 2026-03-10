@@ -187,7 +187,19 @@ body {
   white-space: nowrap;
 }
 
-.db-entry-disconnect {
+.db-entry-actions {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  opacity: 0;
+  transition: opacity 0.15s ease;
+}
+
+.db-entry:hover .db-entry-actions {
+  opacity: 1;
+}
+
+.db-entry-action {
   width: 18px;
   height: 18px;
   border: none;
@@ -195,19 +207,13 @@ body {
   color: var(--text-secondary);
   cursor: pointer;
   border-radius: 2px;
-  opacity: 0;
-  transition: opacity 0.15s ease;
   display: flex;
   align-items: center;
   justify-content: center;
   padding: 0;
 }
 
-.db-entry:hover .db-entry-disconnect {
-  opacity: 1;
-}
-
-.db-entry-disconnect:hover {
+.db-entry-action:hover {
   background: var(--accent-color);
   color: white;
 }
@@ -360,6 +366,36 @@ body {
   font-size: 12px;
 }
 
+.object-item-actions {
+  display: none;
+  align-items: center;
+  gap: 2px;
+  flex-shrink: 0;
+}
+
+.object-item:hover .object-item-actions {
+  display: flex;
+}
+
+.object-item-actions button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  border: none;
+  background: transparent;
+  color: var(--text-secondary);
+  cursor: pointer;
+  border-radius: 3px;
+  padding: 0;
+}
+
+.object-item-actions button:hover {
+  background: var(--bg-tertiary);
+  color: var(--text-primary);
+}
+
 .object-empty {
   padding: 16px 12px;
   text-align: center;
@@ -375,7 +411,7 @@ body {
 
 /* Connect Dialog */
 .connect-dialog {
-  width: 480px;
+  width: 560px;
   max-height: 80vh;
   display: flex;
   flex-direction: column;
@@ -496,93 +532,79 @@ body {
 .connect-dialog-select {
   flex: 1;
   overflow-y: auto;
-  max-height: 400px;
+  max-height: 500px;
+  display: flex;
+  flex-direction: column;
 }
 
-.connect-dialog-select-header {
+.connect-dialog-picker {
+  display: flex;
+  border-bottom: 1px solid var(--border-color);
+  min-height: 200px;
+  max-height: 300px;
+}
+
+.connect-dialog-picker-col {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.connect-dialog-picker-col:first-child {
+  border-right: 1px solid var(--border-color);
+}
+
+.connect-dialog-picker-label {
+  padding: 6px 12px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+  border-bottom: 1px solid var(--border-color);
+  flex-shrink: 0;
+}
+
+.connect-dialog-picker-list {
+  flex: 1;
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: var(--bg-hover) transparent;
+}
+
+.connect-dialog-picker-item {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 10px 20px;
-  border-bottom: 1px solid var(--border-color);
-  font-size: 12px;
-  color: var(--text-secondary);
-}
-
-.connect-dialog-select-all {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  cursor: pointer;
-}
-
-.connect-dialog-select-count {
-  color: var(--text-muted);
-  font-size: 11px;
-}
-
-.connect-dialog-entries {
-  padding: 4px 0;
-}
-
-.connect-dialog-db-group {
-  border-bottom: 1px solid var(--border-color);
-}
-
-.connect-dialog-db-group:last-child {
-  border-bottom: none;
-}
-
-.connect-dialog-db-header {
-  display: flex;
-  align-items: baseline;
-  gap: 8px;
-  padding: 8px 20px 4px;
-}
-
-.connect-dialog-db-name {
-  font-size: 13px;
-  font-weight: 500;
-  color: var(--text-primary);
-}
-
-.connect-dialog-db-toggle {
-  background: none;
-  border: none;
-  padding: 0;
-  cursor: pointer;
-  font-size: 11px;
-  color: var(--text-muted);
-}
-
-.connect-dialog-db-toggle:hover {
-  color: var(--text-secondary);
-}
-
-.connect-dialog-schema-row {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 4px 12px;
-  padding: 4px 20px 10px 44px;
-}
-
-.connect-dialog-schema-check {
-  display: flex;
-  align-items: center;
-  gap: 5px;
-  cursor: pointer;
+  padding: 6px 12px;
   font-size: 12px;
   color: var(--text-tertiary);
-  padding: 2px 6px;
-  border-radius: 3px;
+  cursor: pointer;
 }
 
-.connect-dialog-schema-check:hover {
+.connect-dialog-picker-item:hover {
   background: var(--bg-hover);
   color: var(--text-primary);
 }
 
-.connect-dialog-schema-check.disabled {
+.connect-dialog-picker-item.active {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+  font-weight: 500;
+  border-left: 2px solid var(--accent-color);
+}
+
+.connect-dialog-picker-item.has-checked {
+  color: var(--text-primary);
+}
+
+.connect-dialog-picker-item.checked {
+  color: var(--accent-color);
+  font-weight: 500;
+}
+
+.connect-dialog-picker-item.disabled {
   opacity: 0.5;
   cursor: default;
 }
@@ -590,7 +612,47 @@ body {
 .connect-dialog-already {
   font-size: 10px;
   color: var(--text-muted);
-  margin-left: auto;
+}
+
+.connect-dialog-selection-summary {
+  flex-shrink: 0;
+}
+
+.connect-dialog-selection-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  padding: 6px 12px 10px;
+}
+
+.connect-dialog-selection-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 6px 2px 8px;
+  font-size: 11px;
+  color: var(--text-primary);
+  background: var(--bg-hover);
+  border-radius: 3px;
+}
+
+.connect-dialog-selection-remove {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 14px;
+  height: 14px;
+  border: none;
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+  border-radius: 2px;
+  padding: 0;
+}
+
+.connect-dialog-selection-remove:hover {
+  color: var(--text-primary);
+  background: var(--bg-tertiary);
 }
 
 .connect-dialog-actions {
@@ -1043,11 +1105,20 @@ body {
 .results-header {
   display: flex;
   align-items: center;
-  justify-content: space-between;
   padding: 8px 16px;
   background: var(--bg-secondary);
   border-bottom: 1px solid var(--border-color);
   font-weight: 500;
+}
+
+.results-header > span:first-child {
+  flex: 1;
+}
+
+.results-header-right {
+  display: flex;
+  align-items: center;
+  gap: 8px;
 }
 
 .row-count {
@@ -1708,6 +1779,32 @@ td:has(.cell-edit-input) {
   background: var(--bg-secondary);
   border-bottom: 1px solid var(--border-color);
   font-weight: 500;
+  text-transform: capitalize;
+}
+
+.refresh-button {
+  width: 24px;
+  height: 24px;
+  border: none;
+  background: transparent;
+  color: var(--text-secondary);
+  cursor: pointer;
+  border-radius: 3px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  flex-shrink: 0;
+}
+
+.refresh-button:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+
+.refresh-button:disabled {
+  opacity: 0.5;
+  cursor: default;
 }
 
 .metadata-content {
@@ -2899,11 +2996,31 @@ td:has(.cell-edit-input) {
   overflow-x: auto;
   flex: 1;
   gap: 2px;
-  scrollbar-width: none;
+  mask-image: linear-gradient(to right, transparent, black 16px, black calc(100% - 16px), transparent);
+  -webkit-mask-image: linear-gradient(to right, transparent, black 16px, black calc(100% - 16px), transparent);
+  scrollbar-width: thin;
+  scrollbar-color: transparent transparent;
+}
+
+.tab-list:hover {
+  scrollbar-color: var(--bg-hover) transparent;
 }
 
 .tab-list::-webkit-scrollbar {
-  display: none;
+  height: 3px;
+}
+
+.tab-list::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.tab-list::-webkit-scrollbar-thumb {
+  background: transparent;
+  border-radius: 3px;
+}
+
+.tab-list:hover::-webkit-scrollbar-thumb {
+  background: var(--bg-hover);
 }
 
 .tab {
@@ -2914,6 +3031,7 @@ td:has(.cell-edit-input) {
   background: transparent;
   border: none;
   border-left: 3px solid transparent;
+  border-bottom: 2px solid transparent;
   color: var(--text-secondary);
   cursor: pointer;
   font-size: 12px;
@@ -2931,6 +3049,7 @@ td:has(.cell-edit-input) {
   background: var(--bg-primary);
   color: var(--text-primary);
   font-weight: 500;
+  border-bottom-color: var(--accent-color);
 }
 
 .tab.has-pending .tab-title::after {

@@ -7,7 +7,7 @@ use crate::cloud::{
 };
 use crate::db::{ColumnInfo, ConnectionManager, ConstraintInfo, FunctionInfo, IndexInfo, QueryResult};
 use crate::history::{HistoryManager, QueryHistoryEntry, QueryHistoryFilter};
-use crate::storage::{self, Category, ConnectionConfig, DatabaseType};
+use crate::storage::{self, Category, ConnectionConfig, DatabaseType, SslMode};
 use std::sync::OnceLock;
 use tauri::Manager;
 use tokio::sync::OnceCell;
@@ -43,6 +43,8 @@ pub struct SaveConnectionInput {
     pub database: Option<String>,
     pub category_id: Option<String>,
     pub visible_databases: Option<u16>,
+    #[serde(default)]
+    pub ssl_mode: SslMode,
 }
 
 #[derive(serde::Deserialize)]
@@ -57,6 +59,8 @@ pub struct UpdateConnectionInput {
     pub database: Option<String>,
     pub category_id: Option<String>,
     pub visible_databases: Option<u16>,
+    #[serde(default)]
+    pub ssl_mode: SslMode,
 }
 
 #[tauri::command]
@@ -79,6 +83,7 @@ pub fn save_connection(
         input.category_id,
     );
     config.visible_databases = input.visible_databases;
+    config.ssl_mode = input.ssl_mode;
     storage::add_connection(&config_dir, config)
 }
 
@@ -136,6 +141,7 @@ pub fn update_connection(
         database: input.database,
         category_id: input.category_id,
         visible_databases: input.visible_databases,
+        ssl_mode: input.ssl_mode,
     };
     storage::update_connection(&config_dir, config)
 }

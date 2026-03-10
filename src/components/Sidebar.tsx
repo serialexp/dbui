@@ -24,6 +24,7 @@ interface Props {
   onMetadataSelect: (view: MetadataView) => void;
   onFunctionSelect: (connectionId: string, database: string, schema: string, functionName: string) => void;
   onCategoryColorChange?: (color: string | null) => void;
+  onShowProcesses: (ctx: WorkingContext) => void;
 }
 
 export function Sidebar(props: Props) {
@@ -69,21 +70,32 @@ export function Sidebar(props: Props) {
   };
 
   const handleDisconnect = async (ctx: WorkingContext) => {
-    try {
-      await disconnect(ctx.connectionId);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
+    const remaining = contexts().filter(
+      (c) => c.connectionId === ctx.connectionId && c.id !== ctx.id
+    );
+
+    // Only disconnect the backend connection if this is the last context for it
+    if (remaining.length === 0) {
+      try {
+        await disconnect(ctx.connectionId);
+      } catch (err) {
+        setError(err instanceof Error ? err.message : String(err));
+      }
     }
 
-    // Remove all contexts for this connection
-    setContexts((prev) => prev.filter((c) => c.connectionId !== ctx.connectionId));
+    // Remove only this context
+    setContexts((prev) => prev.filter((c) => c.id !== ctx.id));
 
-    // Clear active if it was from this connection
-    const active = activeContext();
-    if (active && active.connectionId === ctx.connectionId) {
-      setActiveContextId(null);
-      props.onConnectionChange(null);
-      props.onCategoryColorChange?.(null);
+    // Clear active if it was the removed context
+    if (activeContextId() === ctx.id) {
+      // Select another context from the same connection if available, otherwise clear
+      if (remaining.length > 0) {
+        handleContextSelect(remaining[0]);
+      } else {
+        setActiveContextId(null);
+        props.onConnectionChange(null);
+        props.onCategoryColorChange?.(null);
+      }
     }
   };
 
@@ -133,6 +145,7 @@ export function Sidebar(props: Props) {
         onContextSelect={handleContextSelect}
         onDisconnect={handleDisconnect}
         onConnectClick={() => setShowConnectDialog(true)}
+        onShowProcesses={props.onShowProcesses}
       />
 
       <ObjectPanel

@@ -2,7 +2,7 @@
 // ABOUTME: Supports PostgreSQL, MySQL, and SQLite connection configuration.
 
 import { createSignal, createEffect, Show, For, onMount, onCleanup } from "solid-js";
-import type { DatabaseType, SaveConnectionInput, UpdateConnectionInput, Category, ConnectionConfig } from "../lib/types";
+import type { DatabaseType, SslMode, SaveConnectionInput, UpdateConnectionInput, Category, ConnectionConfig } from "../lib/types";
 import { saveConnection, updateConnection } from "../lib/tauri";
 
 interface Props {
@@ -24,6 +24,7 @@ export function ConnectionForm(props: Props) {
   const [connectionUrl, setConnectionUrl] = createSignal("");
   const [categoryId, setCategoryId] = createSignal<string | null>(null);
   const [visibleDatabases, setVisibleDatabases] = createSignal<number>(4);
+  const [sslMode, setSslMode] = createSignal<SslMode>("disable");
   const [error, setError] = createSignal<string | null>(null);
   const [saving, setSaving] = createSignal(false);
   const [updatingFromUrl, setUpdatingFromUrl] = createSignal(false);
@@ -38,6 +39,7 @@ export function ConnectionForm(props: Props) {
       setDbType(conn.db_type);
       setCategoryId(conn.category_id);
       setVisibleDatabases(conn.visible_databases ?? 4);
+      setSslMode(conn.ssl_mode ?? "disable");
 
       if (conn.db_type === "sqlite") {
         setFilePath(conn.host);
@@ -259,6 +261,7 @@ export function ConnectionForm(props: Props) {
           database: dbType() === "sqlite" ? null : database() || null,
           category_id: categoryId(),
           visible_databases: dbType() === "redis" ? visibleDatabases() : null,
+          ssl_mode: sslMode(),
         };
         await updateConnection(input);
       } else {
@@ -272,6 +275,7 @@ export function ConnectionForm(props: Props) {
           database: dbType() === "sqlite" ? null : database() || null,
           category_id: categoryId(),
           visible_databases: dbType() === "redis" ? visibleDatabases() : null,
+          ssl_mode: sslMode(),
         };
         await saveConnection(input);
       }
@@ -466,6 +470,41 @@ export function ConnectionForm(props: Props) {
                   onInput={(e) => setDatabase(e.currentTarget.value)}
                   placeholder="Leave empty to browse all"
                 />
+              </div>
+            </Show>
+
+            <Show when={!isRedis()}>
+              <div class="form-group">
+                <label>SSL Mode</label>
+                <div class="radio-group">
+                  <label>
+                    <input
+                      type="radio"
+                      name="sslMode"
+                      checked={sslMode() === "disable"}
+                      onChange={() => setSslMode("disable")}
+                    />
+                    Disable
+                  </label>
+                  <label>
+                    <input
+                      type="radio"
+                      name="sslMode"
+                      checked={sslMode() === "prefer"}
+                      onChange={() => setSslMode("prefer")}
+                    />
+                    Prefer
+                  </label>
+                  <label>
+                    <input
+                      type="radio"
+                      name="sslMode"
+                      checked={sslMode() === "require"}
+                      onChange={() => setSslMode("require")}
+                    />
+                    Require
+                  </label>
+                </div>
               </div>
             </Show>
 

@@ -4,6 +4,27 @@
 use super::{ColumnInfo, ConstraintInfo, FunctionInfo, IndexInfo};
 use sqlx::Row;
 
+/// MySQL over TLS may return information_schema strings as VARBINARY instead of VARCHAR.
+/// This helper tries String first, then falls back to reading raw bytes.
+/// Uses positional index to avoid column-name lookup issues.
+fn get_str(row: &sqlx::mysql::MySqlRow, index: usize) -> String {
+    row.try_get::<String, _>(index).unwrap_or_else(|_| {
+        row.try_get::<Vec<u8>, _>(index)
+            .map(|bytes| String::from_utf8_lossy(&bytes).into_owned())
+            .unwrap_or_default()
+    })
+}
+
+fn get_opt_str(row: &sqlx::mysql::MySqlRow, index: usize) -> Option<String> {
+    row.try_get::<Option<String>, _>(index)
+        .unwrap_or_else(|_| {
+            row.try_get::<Option<Vec<u8>>, _>(index)
+                .ok()
+                .flatten()
+                .map(|bytes| String::from_utf8_lossy(&bytes).into_owned())
+        })
+}
+
 pub async fn list_databases(pool: &sqlx::MySqlPool) -> Result<Vec<String>, String> {
     let rows = sqlx::query("SHOW DATABASES")
         .fetch_all(pool)
@@ -12,7 +33,7 @@ pub async fn list_databases(pool: &sqlx::MySqlPool) -> Result<Vec<String>, Strin
 
     Ok(rows
         .iter()
-        .map(|r| r.get::<String, _>(0))
+        .map(|r| get_str(r, 0))
         .filter(|name| {
             name != "information_schema"
                 && name != "mysql"
@@ -23,8 +44,6 @@ pub async fn list_databases(pool: &sqlx::MySqlPool) -> Result<Vec<String>, Strin
 }
 
 pub async fn list_schemas(_pool: &sqlx::MySqlPool, database: &str) -> Result<Vec<String>, String> {
-    // In MySQL, schemas and databases are synonymous
-    // Return the current database as the only "schema"
     Ok(vec![database.to_string()])
 }
 
@@ -43,7 +62,7 @@ pub async fn list_tables(
     .await
     .map_err(|e| format!("Failed to list tables: {}", e))?;
 
-    Ok(rows.iter().map(|r| r.get("table_name")).collect())
+    Ok(rows.iter().map(|r| get_str(r, 0)).collect())
 }
 
 pub async fn list_views(
@@ -61,7 +80,7 @@ pub async fn list_views(
     .await
     .map_err(|e| format!("Failed to list views: {}", e))?;
 
-    Ok(rows.iter().map(|r| r.get("table_name")).collect())
+    Ok(rows.iter().map(|r| get_str(r, 0)).collect())
 }
 
 pub async fn list_functions(
@@ -79,7 +98,7 @@ pub async fn list_functions(
     .await
     .map_err(|e| format!("Failed to list functions: {}", e))?;
 
-    Ok(rows.iter().map(|r| r.get("routine_name")).collect())
+    Ok(rows.iter().map(|r| get_str(r, 0)).collect())
 }
 
 pub async fn get_function_definition(
@@ -88,7 +107,7 @@ pub async fn get_function_definition(
     _schema: &str,
     function_name: &str,
 ) -> Result<FunctionInfo, String> {
-    // First, get the function info from information_schema
+    // SELECT routine_name(0), data_type(1), external_language(2)
     let info_row = sqlx::query(
         "SELECT routine_name, data_type, external_language
          FROM information_schema.routines
@@ -101,20 +120,19 @@ pub async fn get_function_definition(
     .await
     .map_err(|e| format!("Failed to get function info: {}", e))?;
 
-    // Get the CREATE FUNCTION statement
     let query = format!("SHOW CREATE FUNCTION `{}`.`{}`", database, function_name);
     let create_row = sqlx::query(&query)
         .fetch_one(pool)
         .await
         .map_err(|e| format!("Failed to get function definition: {}", e))?;
 
-    let definition: String = create_row.try_get(2).unwrap_or_default();
+    let definition = get_str(&create_row, 2);
 
     Ok(FunctionInfo {
-        name: info_row.get("routine_name"),
+        name: get_str(&info_row, 0),
         definition,
-        return_type: info_row.get("data_type"),
-        language: info_row.get("external_language"),
+        return_type: get_opt_str(&info_row, 1),
+        language: get_opt_str(&info_row, 2),
     })
 }
 
@@ -124,6 +142,7 @@ pub async fn list_columns(
     _schema: &str,
     table: &str,
 ) -> Result<Vec<ColumnInfo>, String> {
+    // SELECT column_name(0), data_type(1), is_nullable(2), column_default(3), column_key(4)
     let rows = sqlx::query(
         r#"
         SELECT
@@ -146,11 +165,11 @@ pub async fn list_columns(
     Ok(rows
         .iter()
         .map(|r| ColumnInfo {
-            name: r.get("column_name"),
-            data_type: r.get("data_type"),
-            is_nullable: r.get::<String, _>("is_nullable") == "YES",
-            column_default: r.get("column_default"),
-            is_primary_key: r.get::<String, _>("column_key") == "PRI",
+            name: get_str(r, 0),
+            data_type: get_str(r, 1),
+            is_nullable: get_str(r, 2) == "YES",
+            column_default: get_opt_str(r, 3),
+            is_primary_key: get_str(r, 4) == "PRI",
         })
         .collect())
 }
@@ -161,6 +180,7 @@ pub async fn list_indexes(
     _schema: &str,
     table: &str,
 ) -> Result<Vec<IndexInfo>, String> {
+    // SELECT index_name(0), columns(1), is_unique(2), is_primary(3)
     let rows = sqlx::query(
         r#"
         SELECT
@@ -183,12 +203,12 @@ pub async fn list_indexes(
     Ok(rows
         .iter()
         .map(|r| {
-            let columns_str: String = r.get("columns");
+            let columns_str = get_str(r, 1);
             IndexInfo {
-                name: r.get("index_name"),
+                name: get_str(r, 0),
                 columns: columns_str.split(',').map(|s| s.to_string()).collect(),
-                is_unique: r.get("is_unique"),
-                is_primary: r.get("is_primary"),
+                is_unique: r.get(2),
+                is_primary: r.get(3),
             }
         })
         .collect())
@@ -212,6 +232,7 @@ pub async fn list_constraints(
     _schema: &str,
     table: &str,
 ) -> Result<Vec<ConstraintInfo>, String> {
+    // SELECT constraint_name(0), constraint_type(1), columns(2), foreign_table(3), foreign_columns(4)
     let rows = sqlx::query(
         r#"
         SELECT
@@ -239,16 +260,15 @@ pub async fn list_constraints(
     Ok(rows
         .iter()
         .map(|r| {
-            let foreign_cols: Option<String> = r.get("foreign_columns");
+            let foreign_cols = get_opt_str(r, 4);
             ConstraintInfo {
-                name: r.get("constraint_name"),
-                constraint_type: r.get("constraint_type"),
-                columns: r
-                    .get::<String, _>("columns")
+                name: get_str(r, 0),
+                constraint_type: get_str(r, 1),
+                columns: get_str(r, 2)
                     .split(',')
                     .map(|s| s.to_string())
                     .collect(),
-                foreign_table: r.get("foreign_table"),
+                foreign_table: get_opt_str(r, 3),
                 foreign_columns: foreign_cols
                     .map(|s| s.split(',').map(|c| c.to_string()).collect()),
             }

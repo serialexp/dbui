@@ -2,6 +2,7 @@
 // ABOUTME: Mirrors Rust structs for type-safe communication.
 
 export type DatabaseType = "postgres" | "mysql" | "sqlite" | "redis";
+export type SslMode = "disable" | "prefer" | "require";
 
 export interface Category {
   id: string;
@@ -20,6 +21,7 @@ export interface ConnectionConfig {
   database: string | null;
   category_id: string | null;
   visible_databases: number | null;
+  ssl_mode: SslMode;
 }
 
 export interface SaveConnectionInput {
@@ -32,6 +34,7 @@ export interface SaveConnectionInput {
   database: string | null;
   category_id: string | null;
   visible_databases: number | null;
+  ssl_mode: SslMode;
 }
 
 export interface UpdateConnectionInput {
@@ -45,6 +48,7 @@ export interface UpdateConnectionInput {
   database: string | null;
   category_id: string | null;
   visible_databases: number | null;
+  ssl_mode: SslMode;
 }
 
 export interface SaveCategoryInput {

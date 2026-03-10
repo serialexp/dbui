@@ -46,6 +46,21 @@ pub struct ConnectionConfig {
     pub category_id: Option<String>,
     #[serde(default)]
     pub visible_databases: Option<u16>,
+    #[serde(default = "default_ssl_mode")]
+    pub ssl_mode: SslMode,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[serde(rename_all = "lowercase")]
+pub enum SslMode {
+    #[default]
+    Disable,
+    Prefer,
+    Require,
+}
+
+fn default_ssl_mode() -> SslMode {
+    SslMode::Disable
 }
 
 impl ConnectionConfig {
@@ -70,6 +85,7 @@ impl ConnectionConfig {
             database,
             category_id,
             visible_databases: None,
+            ssl_mode: SslMode::default(),
         }
     }
 }

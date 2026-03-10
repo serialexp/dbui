@@ -20,6 +20,9 @@ import eyeSvg from "@phosphor-icons/core/assets/regular/eye.svg?raw";
 import functionSvg from "@phosphor-icons/core/assets/regular/function.svg?raw";
 import arrowsClockwiseSvg from "@phosphor-icons/core/assets/regular/arrows-clockwise.svg?raw";
 import rowsSvg from "@phosphor-icons/core/assets/regular/rows.svg?raw";
+import columnsSvg from "@phosphor-icons/core/assets/regular/columns.svg?raw";
+import lightningSvg from "@phosphor-icons/core/assets/regular/lightning.svg?raw";
+import lockSvg from "@phosphor-icons/core/assets/regular/lock.svg?raw";
 
 interface Props {
   context: WorkingContext | null;
@@ -127,6 +130,18 @@ export function ObjectPanel(props: Props) {
     }
   };
 
+  const openMetadata = async (name: string, type: "columns" | "indexes" | "constraints") => {
+    const ctx = props.context;
+    if (!ctx) return;
+    const fetchers = {
+      columns: listColumns,
+      indexes: listIndexes,
+      constraints: listConstraints,
+    };
+    const data = await fetchers[type](ctx.connectionId, ctx.database, ctx.schema, name);
+    props.onMetadataSelect({ type, data, connectionId: ctx.connectionId, database: ctx.database, schema: ctx.schema, table: name });
+  };
+
   const handleContextMenu = (e: MouseEvent, name: string) => {
     const ctx = props.context;
     if (!ctx || activeTab() !== "tables") return;
@@ -137,27 +152,9 @@ export function ObjectPanel(props: Props) {
         label: "Data",
         action: () => props.onTableSelect(ctx.connectionId, ctx.database, ctx.schema, name),
       },
-      {
-        label: "Columns",
-        action: async () => {
-          const data = await listColumns(ctx.connectionId, ctx.database, ctx.schema, name);
-          props.onMetadataSelect({ type: "columns", data, connectionId: ctx.connectionId, database: ctx.database, schema: ctx.schema, table: name });
-        },
-      },
-      {
-        label: "Indexes",
-        action: async () => {
-          const data = await listIndexes(ctx.connectionId, ctx.database, ctx.schema, name);
-          props.onMetadataSelect({ type: "indexes", data, connectionId: ctx.connectionId, database: ctx.database, schema: ctx.schema, table: name });
-        },
-      },
-      {
-        label: "Constraints",
-        action: async () => {
-          const data = await listConstraints(ctx.connectionId, ctx.database, ctx.schema, name);
-          props.onMetadataSelect({ type: "constraints", data, connectionId: ctx.connectionId, database: ctx.database, schema: ctx.schema, table: name });
-        },
-      },
+      { label: "Columns", action: () => openMetadata(name, "columns") },
+      { label: "Indexes", action: () => openMetadata(name, "indexes") },
+      { label: "Constraints", action: () => openMetadata(name, "constraints") },
     ];
     setContextMenu({ x: e.clientX, y: e.clientY, items });
   };
@@ -240,6 +237,28 @@ export function ObjectPanel(props: Props) {
                         <Icon svg={getTabIcon(activeTab())} size={12} />
                       </span>
                       <span class="object-item-label">{name}</span>
+                      <Show when={activeTab() === "tables"}>
+                        <span class="object-item-actions">
+                          <button
+                            title="Columns"
+                            onClick={(e) => { e.stopPropagation(); openMetadata(name, "columns"); }}
+                          >
+                            <Icon svg={columnsSvg} size={12} />
+                          </button>
+                          <button
+                            title="Indexes"
+                            onClick={(e) => { e.stopPropagation(); openMetadata(name, "indexes"); }}
+                          >
+                            <Icon svg={lightningSvg} size={12} />
+                          </button>
+                          <button
+                            title="Constraints"
+                            onClick={(e) => { e.stopPropagation(); openMetadata(name, "constraints"); }}
+                          >
+                            <Icon svg={lockSvg} size={12} />
+                          </button>
+                        </span>
+                      </Show>
                     </div>
                   )}
                 </For>

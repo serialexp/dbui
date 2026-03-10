@@ -7,6 +7,7 @@ import type { WorkingContext, Category } from "../lib/types";
 
 import ejectSvg from "@phosphor-icons/core/assets/regular/eject.svg?raw";
 import plusSvg from "@phosphor-icons/core/assets/regular/plus.svg?raw";
+import listSvg from "@phosphor-icons/core/assets/regular/list.svg?raw";
 
 interface Props {
   contexts: WorkingContext[];
@@ -15,6 +16,7 @@ interface Props {
   onContextSelect: (ctx: WorkingContext) => void;
   onDisconnect: (ctx: WorkingContext) => void;
   onConnectClick: () => void;
+  onShowProcesses: (ctx: WorkingContext) => void;
 }
 
 interface GroupedContexts {
@@ -117,16 +119,30 @@ export function DatabaseList(props: Props) {
                     alt={ctx.dbType}
                   />
                   <span class="db-entry-label">{formatLabel(ctx)}</span>
-                  <button
-                    class="db-entry-disconnect"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      props.onDisconnect(ctx);
-                    }}
-                    title="Disconnect"
-                  >
-                    <Icon svg={ejectSvg} size={12} />
-                  </button>
+                  <div class="db-entry-actions">
+                    <Show when={ctx.dbType === "postgres" || ctx.dbType === "mysql"}>
+                      <button
+                        class="db-entry-action"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          props.onShowProcesses(ctx);
+                        }}
+                        title="Show running queries"
+                      >
+                        <Icon svg={listSvg} size={12} />
+                      </button>
+                    </Show>
+                    <button
+                      class="db-entry-action"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        props.onDisconnect(ctx);
+                      }}
+                      title="Disconnect"
+                    >
+                      <Icon svg={ejectSvg} size={12} />
+                    </button>
+                  </div>
                 </div>
               )}
             </For>

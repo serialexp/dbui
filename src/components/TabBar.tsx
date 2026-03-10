@@ -82,9 +82,16 @@ export function TabBar(props: Props) {
     });
   };
 
+  const handleWheel = (e: WheelEvent) => {
+    if (e.deltaY !== 0) {
+      e.preventDefault();
+      (e.currentTarget as HTMLElement).scrollLeft += e.deltaY;
+    }
+  };
+
   return (
     <div class="tab-bar">
-      <div class="tab-list">
+      <div class="tab-list" onWheel={handleWheel}>
         <For each={store.tabs}>
           {(tab) => (
             <button

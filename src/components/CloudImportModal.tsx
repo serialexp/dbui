@@ -334,6 +334,8 @@ export function CloudImportModal(props: Props) {
         password: parsed.password,
         database: parsed.database,
         category_id: categoryId(),
+        visible_databases: null,
+        ssl_mode: "disable",
       };
 
       await saveConnection(input);

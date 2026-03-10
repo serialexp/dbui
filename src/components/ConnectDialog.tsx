@@ -36,7 +36,9 @@ export function ConnectDialog(props: Props) {
   const [selectedConnection, setSelectedConnection] = createSignal<ConnectionConfig | null>(null);
   const [entries, setEntries] = createSignal<DiscoveredEntry[]>([]);
   const [loading, setLoading] = createSignal(false);
+  const [loadingStatus, setLoadingStatus] = createSignal<string>("Connecting...");
   const [error, setError] = createSignal<string | null>(null);
+  const [selectedDatabase, setSelectedDatabase] = createSignal<string | null>(null);
 
   onMount(async () => {
     try {
@@ -82,7 +84,9 @@ export function ConnectDialog(props: Props) {
     setError(null);
 
     try {
+      setLoadingStatus(`Connecting to ${conn.name}...`);
       await connect(conn.id);
+      setLoadingStatus("Listing databases...");
       const databases = await listDatabases(conn.id);
 
       const discovered: DiscoveredEntry[] = [];
@@ -116,6 +120,7 @@ export function ConnectDialog(props: Props) {
         // queries information_schema on the currently connected database.
         for (const db of databases) {
           try {
+            setLoadingStatus(`Discovering schemas in ${db}...`);
             await switchDatabase(conn.id, db);
             const schemas = await listSchemas(conn.id, db);
             for (const schema of schemas) {
@@ -145,6 +150,7 @@ export function ConnectDialog(props: Props) {
       }
 
       setEntries(discovered);
+      setSelectedDatabase(discovered.length > 0 ? discovered[0].database : null);
       setStep("select");
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
@@ -158,12 +164,6 @@ export function ConnectDialog(props: Props) {
       prev.map((e, i) =>
         i === index && !e.alreadyExists ? { ...e, checked: !e.checked } : e,
       ),
-    );
-  };
-
-  const toggleAll = (checked: boolean) => {
-    setEntries((prev) =>
-      prev.map((e) => (e.alreadyExists ? e : { ...e, checked })),
     );
   };
 
@@ -191,32 +191,37 @@ export function ConnectDialog(props: Props) {
 
   const checkedCount = () => entries().filter((e) => e.checked && !e.alreadyExists).length;
 
-  const entriesByDatabase = (): { database: string; entries: { entry: DiscoveredEntry; index: number }[] }[] => {
-    const map = new Map<string, { entry: DiscoveredEntry; index: number }[]>();
-    const order: string[] = [];
-
-    entries().forEach((entry, index) => {
-      if (!map.has(entry.database)) {
-        map.set(entry.database, []);
-        order.push(entry.database);
+  /** Unique database names in discovery order. */
+  const databaseList = () => {
+    const seen = new Set<string>();
+    const result: string[] = [];
+    for (const e of entries()) {
+      if (!seen.has(e.database)) {
+        seen.add(e.database);
+        result.push(e.database);
       }
-      map.get(entry.database)!.push({ entry, index });
-    });
-
-    return order.map((db) => ({ database: db, entries: map.get(db)! }));
+    }
+    return result;
   };
 
-  const isDbFullyChecked = (dbEntries: { entry: DiscoveredEntry }[]): boolean => {
-    return dbEntries.every((e) => e.entry.checked || e.entry.alreadyExists);
+  /** Schemas for the currently selected database. */
+  const schemasForSelected = () => {
+    const db = selectedDatabase();
+    if (!db) return [];
+    return entries()
+      .map((e, i) => ({ entry: e, index: i }))
+      .filter(({ entry }) => entry.database === db);
   };
 
-  const toggleDatabase = (database: string, checked: boolean) => {
-    setEntries((prev) =>
-      prev.map((e) =>
-        e.database === database && !e.alreadyExists ? { ...e, checked } : e,
-      ),
-    );
-  };
+  /** All currently checked entries (for the selection summary). */
+  const checkedEntries = () => entries().filter((e) => e.checked && !e.alreadyExists);
+
+  /** Whether a database has any schema selected. */
+  const hasCheckedSchema = (database: string) =>
+    entries().some((e) => e.database === database && e.checked);
+
+  /** Whether the connection type uses schemas (Postgres). */
+  const hasSchemas = () => selectedConnection()?.db_type === "postgres";
 
   const groupedConnections = () => {
     const categoryMap = new Map<string, Category>();
@@ -271,7 +276,7 @@ export function ConnectDialog(props: Props) {
         </Show>
 
         <Show when={loading()}>
-          <div class="connect-dialog-loading">Connecting...</div>
+          <div class="connect-dialog-loading">{loadingStatus()}</div>
         </Show>
 
         {/* Step 1: Pick a connection */}
@@ -326,56 +331,87 @@ export function ConnectDialog(props: Props) {
         {/* Step 2: Select databases/schemas */}
         <Show when={step() === "select" && !loading()}>
           <div class="connect-dialog-select">
-            <div class="connect-dialog-select-header">
-              <label class="connect-dialog-select-all">
-                <input
-                  type="checkbox"
-                  checked={entries().every((e) => e.checked || e.alreadyExists)}
-                  onChange={(e) => toggleAll(e.currentTarget.checked)}
-                />
-                Select all
-              </label>
-              <span class="connect-dialog-select-count">
-                {checkedCount()} selected
-              </span>
-            </div>
-            <div class="connect-dialog-entries">
-              <For each={entriesByDatabase()}>
-                {(group) => (
-                  <div class="connect-dialog-db-group">
-                    <div class="connect-dialog-db-header">
-                      <span class="connect-dialog-db-name">{group.database}</span>
-                      <button
-                        class="connect-dialog-db-toggle"
-                        onClick={() => toggleDatabase(group.database, !isDbFullyChecked(group.entries))}
+            <div class="connect-dialog-picker">
+              {/* Left column: databases */}
+              <div class="connect-dialog-picker-col">
+                <div class="connect-dialog-picker-label">Databases</div>
+                <div class="connect-dialog-picker-list">
+                  <For each={databaseList()}>
+                    {(db) => (
+                      <div
+                        class="connect-dialog-picker-item"
+                        classList={{
+                          active: selectedDatabase() === db,
+                          "has-checked": hasCheckedSchema(db),
+                        }}
+                        onClick={() => setSelectedDatabase(db)}
                       >
-                        {isDbFullyChecked(group.entries) ? "deselect all" : "select all"}
-                      </button>
-                    </div>
-                    <div class="connect-dialog-schema-row">
-                      <For each={group.entries}>
-                        {({ entry, index }) => (
-                          <label
-                            class={`connect-dialog-schema-check ${entry.alreadyExists ? "disabled" : ""}`}
-                          >
-                            <input
-                              type="checkbox"
-                              checked={entry.checked}
-                              disabled={entry.alreadyExists}
-                              onChange={() => toggleEntry(index)}
-                            />
-                            <span>{entry.schema || entry.database}</span>
-                            <Show when={entry.alreadyExists}>
-                              <span class="connect-dialog-already">connected</span>
-                            </Show>
-                          </label>
-                        )}
-                      </For>
-                    </div>
-                  </div>
-                )}
-              </For>
+                        <span>{db}</span>
+                      </div>
+                    )}
+                  </For>
+                </div>
+              </div>
+
+              {/* Right column: schemas for selected database */}
+              <div class="connect-dialog-picker-col">
+                <div class="connect-dialog-picker-label">
+                  {hasSchemas() ? "Schemas" : "Select"}
+                </div>
+                <div class="connect-dialog-picker-list">
+                  <Show when={selectedDatabase()} fallback={
+                    <div class="connect-dialog-empty">Select a database</div>
+                  }>
+                    <For each={schemasForSelected()}>
+                      {({ entry, index }) => (
+                        <div
+                          class="connect-dialog-picker-item"
+                          classList={{
+                            checked: entry.checked,
+                            disabled: entry.alreadyExists,
+                          }}
+                          onClick={() => !entry.alreadyExists && toggleEntry(index)}
+                        >
+                          <span>{entry.schema || entry.database}</span>
+                          <Show when={entry.alreadyExists}>
+                            <span class="connect-dialog-already">connected</span>
+                          </Show>
+                        </div>
+                      )}
+                    </For>
+                  </Show>
+                </div>
+              </div>
             </div>
+
+            {/* Selected combinations summary */}
+            <Show when={checkedEntries().length > 0}>
+              <div class="connect-dialog-selection-summary">
+                <div class="connect-dialog-picker-label">
+                  Selected ({checkedEntries().length})
+                </div>
+                <div class="connect-dialog-selection-list">
+                  <For each={checkedEntries()}>
+                    {(entry) => (
+                      <span class="connect-dialog-selection-tag">
+                        {hasSchemas()
+                          ? `${entry.database} / ${entry.schema}`
+                          : entry.database}
+                        <button
+                          class="connect-dialog-selection-remove"
+                          onClick={() => {
+                            const idx = entries().indexOf(entry);
+                            if (idx !== -1) toggleEntry(idx);
+                          }}
+                        >
+                          <Icon svg={xSvg} size={10} />
+                        </button>
+                      </span>
+                    )}
+                  </For>
+                </div>
+              </div>
+            </Show>
           </div>
           <div class="connect-dialog-actions">
             <button onClick={() => props.onClose()}>Cancel</button>

@@ -6,14 +6,18 @@ pub mod postgres;
 pub mod redis_db;
 pub mod sqlite;
 
-use crate::storage::{ConnectionConfig, DatabaseType};
+use crate::storage::{ConnectionConfig, DatabaseType, SslMode};
 use serde::{Deserialize, Serialize};
 use sqlx::Column;
 use sqlx::Row;
 use sqlx::TypeInfo;
+use sqlx::pool::PoolOptions;
 use std::collections::HashMap;
 use std::sync::Arc;
+use std::time::Duration;
 use tokio::sync::RwLock;
+
+const CONNECT_TIMEOUT: Duration = Duration::from_secs(10);
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ColumnInfo {
@@ -80,29 +84,45 @@ impl ConnectionManager {
 
         let pool = match config.db_type {
             DatabaseType::Postgres => {
+                let ssl_param = match config.ssl_mode {
+                    SslMode::Disable => "sslmode=disable",
+                    SslMode::Prefer => "sslmode=prefer",
+                    SslMode::Require => "sslmode=require",
+                };
                 let url = format!(
-                    "postgres://{}:{}@{}:{}/{}",
+                    "postgres://{}:{}@{}:{}/{}?{}",
                     config.username,
                     config.password,
                     config.host,
                     config.port,
-                    config.database.as_deref().unwrap_or("postgres")
+                    config.database.as_deref().unwrap_or("postgres"),
+                    ssl_param,
                 );
-                let pool = sqlx::PgPool::connect(&url)
+                let pool = PoolOptions::new()
+                    .acquire_timeout(CONNECT_TIMEOUT)
+                    .connect(&url)
                     .await
                     .map_err(|e| format!("Failed to connect to PostgreSQL: {}", e))?;
                 ConnectionPool::Postgres(pool)
             }
             DatabaseType::Mysql => {
+                let ssl_param = match config.ssl_mode {
+                    SslMode::Disable => "ssl-mode=DISABLED",
+                    SslMode::Prefer => "ssl-mode=PREFERRED",
+                    SslMode::Require => "ssl-mode=REQUIRED",
+                };
                 let url = format!(
-                    "mysql://{}:{}@{}:{}/{}",
+                    "mysql://{}:{}@{}:{}/{}?{}",
                     config.username,
                     config.password,
                     config.host,
                     config.port,
-                    config.database.as_deref().unwrap_or("mysql")
+                    config.database.as_deref().unwrap_or("mysql"),
+                    ssl_param,
                 );
-                let pool = sqlx::MySqlPool::connect(&url)
+                let pool = PoolOptions::new()
+                    .acquire_timeout(CONNECT_TIMEOUT)
+                    .connect(&url)
                     .await
                     .map_err(|e| format!("Failed to connect to MySQL: {}", e))?;
                 ConnectionPool::Mysql(pool)
@@ -110,7 +130,9 @@ impl ConnectionManager {
             DatabaseType::Sqlite => {
                 // For SQLite, host field contains the file path
                 let url = format!("sqlite:{}", config.host);
-                let pool = sqlx::SqlitePool::connect(&url)
+                let pool = PoolOptions::new()
+                    .acquire_timeout(CONNECT_TIMEOUT)
+                    .connect(&url)
                     .await
                     .map_err(|e| format!("Failed to connect to SQLite: {}", e))?;
                 ConnectionPool::Sqlite(pool)
@@ -576,12 +598,13 @@ fn mysql_value_to_json(
             .ok()
             .map(serde_json::Value::Bool)
             .unwrap_or(serde_json::Value::Null),
-        "TINYINT" | "SMALLINT" | "MEDIUMINT" | "INT" => row
+        "TINYINT" | "SMALLINT" | "MEDIUMINT" | "INT" | "TINYINT UNSIGNED"
+        | "SMALLINT UNSIGNED" | "MEDIUMINT UNSIGNED" | "INT UNSIGNED" => row
             .try_get::<i32, _>(index)
             .ok()
             .map(|v| serde_json::Value::Number(v.into()))
             .unwrap_or(serde_json::Value::Null),
-        "BIGINT" => row
+        "BIGINT" | "BIGINT UNSIGNED" => row
             .try_get::<i64, _>(index)
             .ok()
             .map(|v| serde_json::Value::Number(v.into()))
@@ -595,6 +618,12 @@ fn mysql_value_to_json(
         _ => row
             .try_get::<String, _>(index)
             .ok()
+            .or_else(|| {
+                // MySQL over TLS may return string columns as VARBINARY
+                row.try_get::<Vec<u8>, _>(index)
+                    .ok()
+                    .map(|bytes| String::from_utf8_lossy(&bytes).into_owned())
+            })
             .map(serde_json::Value::String)
             .unwrap_or(serde_json::Value::Null),
     }

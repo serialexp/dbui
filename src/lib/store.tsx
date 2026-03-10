@@ -40,7 +40,8 @@ export interface Tab {
 
   // Selection
   selectedCell: CellSelection | null;
-  selectedMetadataRow: number | null;
+  selectedMetadataRows: number[];
+  lastClickedMetadataRow: number | null;
 
   // View mode
   metadataView: MetadataView;
@@ -77,7 +78,8 @@ function createDefaultTab(overrides: Partial<Tab> = {}): Tab {
     error: null,
     loading: false,
     selectedCell: null,
-    selectedMetadataRow: null,
+    selectedMetadataRows: [],
+    lastClickedMetadataRow: null,
     metadataView: null,
     functionInfo: null,
     tableContext: null,

@@ -3,13 +3,15 @@
 
 import { Show, onMount, onCleanup } from "solid-js";
 import { confirm } from "@tauri-apps/plugin-dialog";
-import type { MetadataView } from "./lib/types";
+import type { MetadataView, WorkingContext } from "./lib/types";
 import {
   executeQuery,
   listConnections,
   getFunctionDefinition,
   saveQueryHistory,
   listColumns,
+  listIndexes,
+  listConstraints,
 } from "./lib/tauri";
 import {
   generateDeleteQuery,
@@ -34,6 +36,8 @@ function AppContent() {
     store,
     activeTab,
     createTab,
+    setActiveTab,
+    updateTab,
     updateActiveTab,
     canGoBack,
     canGoForward,
@@ -42,6 +46,23 @@ function AppContent() {
     pushQueryToNavHistory,
     setShowHistory,
   } = useStore();
+
+  /** Find an existing tab matching a connection/db/schema/table/viewType combo. */
+  const findExistingTab = (
+    connectionId: string,
+    database: string,
+    schema: string,
+    table: string,
+    viewType: string
+  ) =>
+    store.tabs.find(
+      (t) =>
+        t.connectionId === connectionId &&
+        t.database === database &&
+        t.schema === schema &&
+        t.table === table &&
+        t.viewType === viewType
+    );
 
   // Connection/database changes in sidebar are just for navigation
   // Tabs are created when clicking on tables/functions/metadata
@@ -62,6 +83,13 @@ function AppContent() {
     const connections = await listConnections();
     const conn = connections.find((c) => c.id === connectionId);
     if (!conn) return;
+
+    // Re-use existing tab if one matches
+    const existing = findExistingTab(connectionId, database, schema, table, "data");
+    if (existing) {
+      setActiveTab(existing.id);
+      return;
+    }
 
     const newQuery = `SELECT * FROM ${schema}.${table} LIMIT 100;`;
 
@@ -99,8 +127,48 @@ function AppContent() {
     updateActiveTab({ query });
   };
 
+  const handleShowProcesses = async (ctx: WorkingContext) => {
+    const connections = await listConnections();
+    const conn = connections.find((c) => c.id === ctx.connectionId);
+    if (!conn) return;
+
+    const query =
+      ctx.dbType === "postgres"
+        ? `SELECT pid, usename, datname, state, query_start, wait_event_type, query
+FROM pg_stat_activity
+WHERE state IS NOT NULL
+ORDER BY query_start DESC;`
+        : `SHOW FULL PROCESSLIST;`;
+
+    createTab({
+      connectionId: ctx.connectionId,
+      connectionName: conn.name,
+      dbType: ctx.dbType,
+      categoryColor: ctx.categoryColor,
+      database: ctx.database,
+      schema: ctx.schema,
+      table: null,
+      viewType: null,
+      query,
+    });
+
+    const newTab = activeTab();
+    if (newTab) {
+      await handleExecute(query);
+    }
+  };
+
   const handleMetadataSelect = async (view: MetadataView) => {
     if (!view) return;
+
+    // Re-use existing tab if one matches
+    const existing = findExistingTab(
+      view.connectionId, view.database, view.schema, view.table, view.type
+    );
+    if (existing) {
+      setActiveTab(existing.id);
+      return;
+    }
 
     const connections = await listConnections();
     const conn = connections.find((c) => c.id === view.connectionId);
@@ -117,13 +185,144 @@ function AppContent() {
       table: view.table,
       viewType: view.type,
       metadataView: view,
-      selectedMetadataRow: null,
+      selectedMetadataRows: [],
+      lastClickedMetadataRow: null,
       selectedCell: null,
     });
   };
 
-  const handleMetadataRowSelect = (rowIndex: number) => {
-    updateActiveTab({ selectedMetadataRow: rowIndex });
+  const handleMetadataRowToggle = (rowIndex: number, shiftKey: boolean) => {
+    const tab = activeTab();
+    if (!tab?.metadataView) return;
+
+    const current = [...tab.selectedMetadataRows];
+    const lastRow = tab.lastClickedMetadataRow;
+
+    if (shiftKey && lastRow !== null && lastRow !== rowIndex) {
+      const start = Math.min(lastRow, rowIndex);
+      const end = Math.max(lastRow, rowIndex);
+      for (let i = start; i <= end; i++) {
+        if (!current.includes(i)) current.push(i);
+      }
+      updateActiveTab({ selectedMetadataRows: current });
+    } else {
+      const idx = current.indexOf(rowIndex);
+      if (idx !== -1) {
+        current.splice(idx, 1);
+      } else {
+        current.push(rowIndex);
+      }
+      updateActiveTab({ selectedMetadataRows: current, lastClickedMetadataRow: rowIndex });
+    }
+  };
+
+  const handleMetadataToggleAll = () => {
+    const tab = activeTab();
+    if (!tab?.metadataView) return;
+    const total = tab.metadataView.data.length;
+    const allSelected = tab.selectedMetadataRows.length === total && total > 0;
+    if (allSelected) {
+      updateActiveTab({ selectedMetadataRows: [] });
+    } else {
+      updateActiveTab({ selectedMetadataRows: Array.from({ length: total }, (_, i) => i) });
+    }
+  };
+
+  const handleMetadataRefresh = async () => {
+    const tab = activeTab();
+    if (!tab?.metadataView) return;
+
+    const { connectionId, database, schema, table, type } = tab.metadataView;
+    let data;
+    switch (type) {
+      case "columns":
+        data = await listColumns(connectionId, database, schema, table);
+        break;
+      case "indexes":
+        data = await listIndexes(connectionId, database, schema, table);
+        break;
+      case "constraints":
+        data = await listConstraints(connectionId, database, schema, table);
+        break;
+    }
+
+    updateActiveTab({
+      metadataView: { ...tab.metadataView, data },
+      selectedMetadataRows: [],
+      lastClickedMetadataRow: null,
+    });
+  };
+
+  const handleMetadataDrop = async (names: string[]) => {
+    const tab = activeTab();
+    if (!tab?.metadataView) return;
+
+    const { connectionId, database, schema, table, type } = tab.metadataView;
+    let query: string;
+    switch (type) {
+      case "columns":
+        query = names
+          .map((name) => `ALTER TABLE ${schema}.${table} DROP COLUMN ${name};`)
+          .join("\n");
+        break;
+      case "indexes":
+        query = names
+          .map((name) => `DROP INDEX ${schema}.${name};`)
+          .join("\n");
+        break;
+      case "constraints":
+        query = names
+          .map((name) => `ALTER TABLE ${schema}.${table} DROP CONSTRAINT ${name};`)
+          .join("\n");
+        break;
+    }
+
+    // Reuse existing data tab for this table, or create one
+    const existing = findExistingTab(connectionId, database, schema, table, "data");
+    if (existing) {
+      updateTab(existing.id, { query });
+      setActiveTab(existing.id);
+      return;
+    }
+
+    const connections = await listConnections();
+    const conn = connections.find((c) => c.id === connectionId);
+    if (!conn) return;
+
+    createTab({
+      connectionId,
+      connectionName: conn.name,
+      dbType: conn.db_type,
+      categoryColor: null,
+      database,
+      schema,
+      table,
+      viewType: "data",
+      query,
+      metadataView: null,
+      tableContext: { connectionId, database, schema, table },
+    });
+
+    try {
+      const columns = await listColumns(connectionId, database, schema, table);
+      const pkCols = columns.filter((c) => c.is_primary_key).map((c) => c.name);
+      updateActiveTab({ primaryKeyColumns: pkCols });
+    } catch {
+      updateActiveTab({ primaryKeyColumns: [] });
+    }
+  };
+
+  const handleFunctionRefresh = async () => {
+    const tab = activeTab();
+    if (!tab?.connectionId || !tab.database || !tab.schema || !tab.table) return;
+
+    const info = await getFunctionDefinition(
+      tab.connectionId,
+      tab.database,
+      tab.schema,
+      tab.table
+    );
+    updateActiveTab({ functionInfo: info });
   };
 
   const handleFunctionSelect = async (
@@ -132,6 +331,13 @@ function AppContent() {
     schema: string,
     functionName: string
   ) => {
+    // Re-use existing tab if one matches
+    const existing = findExistingTab(connectionId, database, schema, functionName, "function");
+    if (existing) {
+      setActiveTab(existing.id);
+      return;
+    }
+
     const connections = await listConnections();
     const conn = connections.find((c) => c.id === connectionId);
     if (!conn) return;
@@ -331,6 +537,42 @@ function AppContent() {
     updateActiveTab({ query: updateQuery });
   };
 
+  const handleGenerateKill = (rowIndices: number[]) => {
+    const tab = activeTab();
+    if (!tab || !tab.result) return;
+
+    const res = tab.result;
+    // Find the process ID column: "pid" for Postgres, "Id" for MySQL
+    const pidColIndex = res.columns.findIndex(
+      (c) => c.toLowerCase() === "pid" || c.toLowerCase() === "id"
+    );
+    if (pidColIndex === -1) return;
+
+    const pids = rowIndices.map((i) => res.rows[i][pidColIndex]);
+
+    let killQuery: string;
+    if (tab.dbType === "postgres") {
+      const calls = pids.map((pid) => `SELECT pg_terminate_backend(${pid});`);
+      killQuery = calls.join("\n");
+    } else {
+      const calls = pids.map((pid) => `KILL ${pid};`);
+      killQuery = calls.join("\n");
+    }
+
+    updateActiveTab({ query: killQuery });
+  };
+
+  const isProcessListTab = () => {
+    const tab = activeTab();
+    if (!tab || !tab.result) return false;
+    const cols = tab.result.columns.map((c) => c.toLowerCase());
+    // Postgres pg_stat_activity has "pid", MySQL SHOW PROCESSLIST has "Id"
+    return (
+      (cols.includes("pid") && cols.includes("query")) ||
+      (cols.includes("id") && cols.includes("command"))
+    );
+  };
+
   const handleRowDoubleClick = (row: unknown[], columns: string[]) => {
     const tab = activeTab();
     if (!tab) return;
@@ -428,6 +670,7 @@ function AppContent() {
         onMetadataSelect={handleMetadataSelect}
         onFunctionSelect={handleFunctionSelect}
         onCategoryColorChange={handleCategoryColorChange}
+        onShowProcesses={handleShowProcesses}
       />
       <main class="main-content">
         <Show when={store.tabs.length > 0}>
@@ -469,8 +712,12 @@ function AppContent() {
           <Show when={tab()!.metadataView}>
             <MetadataTable
               view={tab()!.metadataView!}
-              selectedRow={tab()!.selectedMetadataRow}
-              onRowSelect={handleMetadataRowSelect}
+              selectedRows={tab()!.selectedMetadataRows}
+              lastClickedRow={tab()!.lastClickedMetadataRow}
+              onRowToggle={handleMetadataRowToggle}
+              onToggleAll={handleMetadataToggleAll}
+              onRefresh={handleMetadataRefresh}
+              onDrop={handleMetadataDrop}
               dbType={tab()!.dbType}
             />
           </Show>
@@ -479,6 +726,7 @@ function AppContent() {
             <FunctionViewer
               functionInfo={tab()!.functionInfo}
               dbType={tab()!.dbType}
+              onRefresh={handleFunctionRefresh}
             />
           </Show>
 
@@ -496,6 +744,7 @@ function AppContent() {
                   primaryKeyColumns={tab()!.primaryKeyColumns}
                   onGenerateDelete={handleGenerateDelete}
                   onGenerateUpdate={handleGenerateUpdate}
+                  onGenerateKill={isProcessListTab() ? handleGenerateKill : undefined}
                   onFilterByValue={handleFilterByValue}
                   onPendingChangesChange={(p) =>
                     updateActiveTab({ hasPendingChanges: p })

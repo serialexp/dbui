@@ -24,6 +24,7 @@ interface Props {
   primaryKeyColumns?: string[];
   onGenerateDelete?: (rowIndices: number[]) => void;
   onGenerateUpdate?: (edits: RowEdit[]) => void;
+  onGenerateKill?: (rowIndices: number[]) => void;
   onPendingChangesChange?: (hasPending: boolean) => void;
   onFilterByValue?: (columnName: string, value: unknown) => void;
   dbType?: DatabaseType | null;
@@ -33,7 +34,7 @@ type ExportFormat = "json" | "sql";
 
 export function ResultsTable(props: Props) {
   const MAX_DISPLAY_ROWS = 1000;
-  const [markedForDeletion, setMarkedForDeletion] = createSignal<Set<number>>(new Set());
+  const [markedForDeletion, setMarkedForDeletion] = createSignal<number[]>([]);
   const [editedCells, setEditedCells] = createSignal<Map<number, Map<number, unknown>>>(new Map());
   const [editingCell, setEditingCell] = createSignal<{ row: number; col: number } | null>(null);
   const [editValue, setEditValue] = createSignal("");
@@ -60,14 +61,14 @@ export function ResultsTable(props: Props) {
 
   createEffect(() => {
     props.result;
-    setMarkedForDeletion(new Set());
+    setMarkedForDeletion([]);
     setEditedCells(new Map());
     setEditingCell(null);
     setLastClickedRow(null);
   });
 
   createEffect(() => {
-    const hasPending = markedForDeletion().size > 0 || editedCells().size > 0;
+    const hasPending = markedForDeletion().length > 0 || editedCells().size > 0;
     props.onPendingChangesChange?.(hasPending);
   });
 
@@ -76,8 +77,8 @@ export function ResultsTable(props: Props) {
     props.tableContext !== undefined;
 
   const canDelete = () =>
-    props.tableContext !== null &&
-    props.tableContext !== undefined;
+    (props.tableContext !== null && props.tableContext !== undefined) ||
+    props.onGenerateKill !== undefined;
 
   const isRowEdited = (rowIndex: number) => editedCells().has(rowIndex);
 
@@ -88,51 +89,58 @@ export function ResultsTable(props: Props) {
       .map((_, i) => i)
       .filter((i) => !isRowEdited(i));
     const allSelected = selectableIndices.length > 0 &&
-      selectableIndices.every((i) => current.has(i));
+      selectableIndices.every((i) => current.includes(i));
 
     if (allSelected) {
-      setMarkedForDeletion(new Set());
+      setMarkedForDeletion([]);
     } else {
-      setMarkedForDeletion(new Set(selectableIndices));
+      setMarkedForDeletion([...selectableIndices]);
     }
   };
 
   const toggleRowMarked = (rowIndex: number, shiftKey: boolean) => {
-    const current = new Set(markedForDeletion());
+    const current = [...markedForDeletion()];
     const lastRow = lastClickedRow();
 
     if (shiftKey && lastRow !== null && lastRow !== rowIndex) {
       const start = Math.min(lastRow, rowIndex);
       const end = Math.max(lastRow, rowIndex);
       for (let i = start; i <= end; i++) {
-        if (!isRowEdited(i)) {
-          current.add(i);
+        if (!isRowEdited(i) && !current.includes(i)) {
+          current.push(i);
         }
       }
       setMarkedForDeletion(current);
     } else {
-      if (current.has(rowIndex)) {
-        current.delete(rowIndex);
+      if (current.includes(rowIndex)) {
+        setMarkedForDeletion(current.filter((i) => i !== rowIndex));
       } else {
         if (isRowEdited(rowIndex)) return;
-        current.add(rowIndex);
+        setMarkedForDeletion([...current, rowIndex]);
       }
-      setMarkedForDeletion(current);
       setLastClickedRow(rowIndex);
     }
   };
 
   const handleGenerateDelete = () => {
-    const indices = Array.from(markedForDeletion());
+    const indices = markedForDeletion();
     if (indices.length > 0 && props.onGenerateDelete) {
       props.onGenerateDelete(indices);
-      setMarkedForDeletion(new Set());
+      setMarkedForDeletion([]);
       setEditedCells(new Map());
     }
   };
 
+  const handleGenerateKill = () => {
+    const indices = markedForDeletion();
+    if (indices.length > 0 && props.onGenerateKill) {
+      props.onGenerateKill(indices);
+      setMarkedForDeletion([]);
+    }
+  };
+
   const startEditing = (rowIndex: number, colIndex: number, currentValue: unknown) => {
-    if (markedForDeletion().has(rowIndex)) return;
+    if (markedForDeletion().includes(rowIndex)) return;
     if (!canEdit()) return;
 
     const edited = editedCells().get(rowIndex)?.get(colIndex);
@@ -204,7 +212,7 @@ export function ResultsTable(props: Props) {
 
     props.onGenerateUpdate(rowEdits);
     setEditedCells(new Map());
-    setMarkedForDeletion(new Set());
+    setMarkedForDeletion([]);
   };
 
   const getCellDisplayValue = (rowIndex: number, colIndex: number, originalValue: unknown): unknown => {
@@ -328,55 +336,63 @@ export function ResultsTable(props: Props) {
     <div class="results-table">
       <div class="results-header">
         <span>Results</span>
-        <Show when={props.result}>
-          <Show
-            when={props.result!.rows.length > 0}
-            fallback={
-              <span class="result-message">{props.result!.message || "No results"}</span>
-            }
-          >
-            <span class="row-count">
-              {props.result!.row_count} rows
-              <Show when={isLimited()}>
-                {" "}(showing first {MAX_DISPLAY_ROWS})
-              </Show>
-            </span>
-            <div class="export-dropdown" ref={exportDropdownRef}>
-              <button
-                class="export-btn"
-                onClick={() => setExportMenuOpen(!exportMenuOpen())}
-                title="Export results"
-              >
-                <Icon svg={exportSvg} size={14} />
-                <Show when={exportFeedback()} fallback="Export">
-                  {exportFeedback()}
+        <div class="results-header-right">
+          <Show when={props.result}>
+            <Show
+              when={props.result!.rows.length > 0}
+              fallback={
+                <span class="result-message">{props.result!.message || "No results"}</span>
+              }
+            >
+              <span class="row-count">
+                {props.result!.row_count} rows
+                <Show when={isLimited()}>
+                  {" "}(showing first {MAX_DISPLAY_ROWS})
                 </Show>
-              </button>
-              <Show when={exportMenuOpen()}>
-                <div class="export-menu">
-                  <button onClick={() => handleExport("json")}>
-                    Copy as JSON
-                  </button>
-                  <button onClick={() => handleExport("sql")}>
-                    Copy as SQL INSERT
-                  </button>
-                </div>
-              </Show>
-            </div>
+              </span>
+              <div class="export-dropdown" ref={exportDropdownRef}>
+                <button
+                  class="export-btn"
+                  onClick={() => setExportMenuOpen(!exportMenuOpen())}
+                  title="Export results"
+                >
+                  <Icon svg={exportSvg} size={14} />
+                  <Show when={exportFeedback()} fallback="Export">
+                    {exportFeedback()}
+                  </Show>
+                </button>
+                <Show when={exportMenuOpen()}>
+                  <div class="export-menu">
+                    <button onClick={() => handleExport("json")}>
+                      Copy as JSON
+                    </button>
+                    <button onClick={() => handleExport("sql")}>
+                      Copy as SQL INSERT
+                    </button>
+                  </div>
+                </Show>
+              </div>
+            </Show>
           </Show>
-        </Show>
-        <Show when={editedCells().size > 0}>
-          <button class="generate-update-btn" onClick={handleGenerateUpdate}>
-            <Icon svg={pencilSvg} size={14} />
-            Generate UPDATE ({editedCells().size})
-          </button>
-        </Show>
-        <Show when={markedForDeletion().size > 0}>
-          <button class="generate-delete-btn" onClick={handleGenerateDelete}>
-            <Icon svg={trashSvg} size={14} />
-            Generate DELETE ({markedForDeletion().size})
-          </button>
-        </Show>
+          <Show when={editedCells().size > 0}>
+            <button class="generate-update-btn" onClick={handleGenerateUpdate}>
+              <Icon svg={pencilSvg} size={14} />
+              Generate UPDATE ({editedCells().size})
+            </button>
+          </Show>
+          <Show when={markedForDeletion().length > 0 && props.onGenerateDelete}>
+            <button class="generate-delete-btn" onClick={handleGenerateDelete}>
+              <Icon svg={trashSvg} size={14} />
+              Generate DELETE ({markedForDeletion().length})
+            </button>
+          </Show>
+          <Show when={markedForDeletion().length > 0 && props.onGenerateKill}>
+            <button class="generate-delete-btn" onClick={handleGenerateKill}>
+              <Icon svg={trashSvg} size={14} />
+              Generate KILL ({markedForDeletion().length})
+            </button>
+          </Show>
+        </div>
       </div>
 
       <div class="results-content">
@@ -404,17 +420,16 @@ export function ResultsTable(props: Props) {
                           checked={(() => {
                             const rows = displayRows();
                             const selectable = rows.filter((_, i) => !isRowEdited(i));
-                            return selectable.length > 0 && selectable.length === markedForDeletion().size;
+                            return selectable.length > 0 && selectable.length === markedForDeletion().length;
                           })()}
                           ref={(el) => {
                             createEffect(() => {
-                              const marked = markedForDeletion().size;
+                              const marked = markedForDeletion().length;
                               const selectable = displayRows().filter((_, i) => !isRowEdited(i)).length;
                               el.indeterminate = marked > 0 && marked < selectable;
                             });
                           }}
-                          onClick={(e) => {
-                            e.preventDefault();
+                          onClick={() => {
                             toggleAllRows();
                           }}
                         />
@@ -433,7 +448,7 @@ export function ResultsTable(props: Props) {
                     {(row, getRowIndex) => (
                       <tr
                         classList={{
-                          "marked-for-deletion": markedForDeletion().has(getRowIndex()),
+                          "marked-for-deletion": markedForDeletion().includes(getRowIndex()),
                           "row-edited": isRowEdited(getRowIndex()),
                         }}
                       >
@@ -441,9 +456,8 @@ export function ResultsTable(props: Props) {
                           <td class="delete-cell">
                             <input
                               type="checkbox"
-                              checked={markedForDeletion().has(getRowIndex())}
+                              checked={markedForDeletion().includes(getRowIndex())}
                               onClick={(e) => {
-                                e.preventDefault();
                                 toggleRowMarked(getRowIndex(), e.shiftKey);
                               }}
                             />
