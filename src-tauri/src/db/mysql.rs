@@ -136,6 +136,60 @@ pub async fn get_function_definition(
     })
 }
 
+pub async fn list_materialized_views(
+    _pool: &sqlx::MySqlPool,
+    _database: &str,
+    _schema: &str,
+) -> Result<Vec<String>, String> {
+    // MySQL does not support materialized views
+    Ok(vec![])
+}
+
+pub async fn list_sequences(
+    _pool: &sqlx::MySqlPool,
+    _database: &str,
+    _schema: &str,
+) -> Result<Vec<String>, String> {
+    // MySQL does not have standalone sequences
+    Ok(vec![])
+}
+
+pub async fn list_triggers(
+    pool: &sqlx::MySqlPool,
+    database: &str,
+    _schema: &str,
+) -> Result<Vec<String>, String> {
+    let rows = sqlx::query(
+        "SELECT trigger_name FROM information_schema.triggers
+         WHERE trigger_schema = ?
+         ORDER BY trigger_name",
+    )
+    .bind(database)
+    .fetch_all(pool)
+    .await
+    .map_err(|e| format!("Failed to list triggers: {}", e))?;
+
+    Ok(rows.iter().map(|r| get_str(r, 0)).collect())
+}
+
+pub async fn list_procedures(
+    pool: &sqlx::MySqlPool,
+    database: &str,
+    _schema: &str,
+) -> Result<Vec<String>, String> {
+    let rows = sqlx::query(
+        "SELECT routine_name FROM information_schema.routines
+         WHERE routine_schema = ? AND routine_type = 'PROCEDURE'
+         ORDER BY routine_name",
+    )
+    .bind(database)
+    .fetch_all(pool)
+    .await
+    .map_err(|e| format!("Failed to list procedures: {}", e))?;
+
+    Ok(rows.iter().map(|r| get_str(r, 0)).collect())
+}
+
 pub async fn list_columns(
     pool: &sqlx::MySqlPool,
     database: &str,

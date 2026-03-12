@@ -205,4 +205,4 @@ export interface WorkingContext {
   categoryColor: string | null;
 }
 
-export type ObjectTab = "tables" | "views" | "functions";
+export type ObjectTab = "tables" | "views" | "functions" | "materialized_views" | "sequences" | "triggers" | "procedures";

@@ -2,18 +2,15 @@
 
 ## Database Objects to Add Per Schema/Database
 
-### High Priority
-- [ ] Functions/Stored Procedures - Very common, especially in PostgreSQL and MySQL
-- [ ] Materialized Views - PostgreSQL specific, but widely used for performance
+### Completed
+- [x] Functions/Stored Procedures - Added as separate "Procedures" tab (was already listing functions)
+- [x] Materialized Views - PostgreSQL specific, returns empty for others
+- [x] Sequences - PostgreSQL specific, returns empty for others
+- [x] Triggers - PostgreSQL, MySQL, SQLite support
 
-### Medium Priority
-- [ ] Sequences - PostgreSQL has these (auto-increment generators)
-- [ ] Triggers - Useful to see what automation exists on tables
-
-### Lower Priority
-- [ ] Custom Types/Domains - PostgreSQL specific
-- [ ] Extensions - PostgreSQL specific (like PostGIS)
-
-## Notes
-- Start with Functions and Materialized Views (PostgreSQL only) as they're most commonly needed
-- Functions especially are heavily used in many PostgreSQL databases
+### Implementation Notes
+- All 4 new types live under a "More" dropdown in the ObjectPanel tab bar
+- Primary tabs remain: Tables, Views, Functions
+- "More" dropdown contains: Materialized Views, Sequences, Triggers, Procedures
+- When a "More" type is active, the dropdown button shows the active type name + count
+- Backend support added for all 4 DB engines (Postgres, MySQL, SQLite, Redis)

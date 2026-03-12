@@ -114,6 +114,38 @@ export async function listFunctions(
   return invoke("list_functions", { connectionId, database, schema });
 }
 
+export async function listMaterializedViews(
+  connectionId: string,
+  database: string,
+  schema: string
+): Promise<string[]> {
+  return invoke("list_materialized_views", { connectionId, database, schema });
+}
+
+export async function listSequences(
+  connectionId: string,
+  database: string,
+  schema: string
+): Promise<string[]> {
+  return invoke("list_sequences", { connectionId, database, schema });
+}
+
+export async function listTriggers(
+  connectionId: string,
+  database: string,
+  schema: string
+): Promise<string[]> {
+  return invoke("list_triggers", { connectionId, database, schema });
+}
+
+export async function listProcedures(
+  connectionId: string,
+  database: string,
+  schema: string
+): Promise<string[]> {
+  return invoke("list_procedures", { connectionId, database, schema });
+}
+
 export async function getFunctionDefinition(
   connectionId: string,
   database: string,

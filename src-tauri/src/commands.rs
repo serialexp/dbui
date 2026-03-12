@@ -227,6 +227,50 @@ pub async fn list_functions(
 }
 
 #[tauri::command]
+pub async fn list_materialized_views(
+    connection_id: String,
+    database: String,
+    schema: String,
+) -> Result<Vec<String>, String> {
+    get_manager()
+        .list_materialized_views(&connection_id, &database, &schema)
+        .await
+}
+
+#[tauri::command]
+pub async fn list_sequences(
+    connection_id: String,
+    database: String,
+    schema: String,
+) -> Result<Vec<String>, String> {
+    get_manager()
+        .list_sequences(&connection_id, &database, &schema)
+        .await
+}
+
+#[tauri::command]
+pub async fn list_triggers(
+    connection_id: String,
+    database: String,
+    schema: String,
+) -> Result<Vec<String>, String> {
+    get_manager()
+        .list_triggers(&connection_id, &database, &schema)
+        .await
+}
+
+#[tauri::command]
+pub async fn list_procedures(
+    connection_id: String,
+    database: String,
+    schema: String,
+) -> Result<Vec<String>, String> {
+    get_manager()
+        .list_procedures(&connection_id, &database, &schema)
+        .await
+}
+
+#[tauri::command]
 pub async fn get_function_definition(
     connection_id: String,
     database: String,

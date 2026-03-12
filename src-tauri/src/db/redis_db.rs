@@ -72,6 +72,38 @@ pub async fn get_function_definition(
     Err("Redis does not support functions in the traditional sense".to_string())
 }
 
+pub async fn list_materialized_views(
+    _conn: &mut ConnectionManager,
+    _database: &str,
+    _schema: &str,
+) -> Result<Vec<String>, String> {
+    Ok(vec![])
+}
+
+pub async fn list_sequences(
+    _conn: &mut ConnectionManager,
+    _database: &str,
+    _schema: &str,
+) -> Result<Vec<String>, String> {
+    Ok(vec![])
+}
+
+pub async fn list_triggers(
+    _conn: &mut ConnectionManager,
+    _database: &str,
+    _schema: &str,
+) -> Result<Vec<String>, String> {
+    Ok(vec![])
+}
+
+pub async fn list_procedures(
+    _conn: &mut ConnectionManager,
+    _database: &str,
+    _schema: &str,
+) -> Result<Vec<String>, String> {
+    Ok(vec![])
+}
+
 pub async fn list_columns(
     _conn: &mut ConnectionManager,
     _database: &str,

@@ -1,7 +1,7 @@
-// ABOUTME: Tabbed panel for browsing database objects (tables, views, functions).
+// ABOUTME: Tabbed panel for browsing database objects (tables, views, functions, and more).
 // ABOUTME: Shows objects for the currently selected WorkingContext with context menu for metadata.
 
-import { createSignal, createEffect, For, Show, on } from "solid-js";
+import { createSignal, createEffect, For, Show, on, onCleanup } from "solid-js";
 import { Icon } from "./Icon";
 import { ContextMenu, type ContextMenuItem } from "./ContextMenu";
 import type { WorkingContext, ObjectTab, MetadataView } from "../lib/types";
@@ -9,6 +9,10 @@ import {
   listTables,
   listViews,
   listFunctions,
+  listMaterializedViews,
+  listSequences,
+  listTriggers,
+  listProcedures,
   listColumns,
   listIndexes,
   listConstraints,
@@ -23,6 +27,10 @@ import rowsSvg from "@phosphor-icons/core/assets/regular/rows.svg?raw";
 import columnsSvg from "@phosphor-icons/core/assets/regular/columns.svg?raw";
 import lightningSvg from "@phosphor-icons/core/assets/regular/lightning.svg?raw";
 import lockSvg from "@phosphor-icons/core/assets/regular/lock.svg?raw";
+import dotsThreeSvg from "@phosphor-icons/core/assets/bold/dots-three-bold.svg?raw";
+import stackSvg from "@phosphor-icons/core/assets/regular/stack.svg?raw";
+import listNumbersSvg from "@phosphor-icons/core/assets/regular/list-numbers.svg?raw";
+import gearSvg from "@phosphor-icons/core/assets/regular/gear-six.svg?raw";
 
 interface Props {
   context: WorkingContext | null;
@@ -32,11 +40,18 @@ interface Props {
   onQueryGenerate: (query: string) => void;
 }
 
-interface ObjectCounts {
-  tables: number;
-  views: number;
-  functions: number;
-}
+const PRIMARY_TABS: ObjectTab[] = ["tables", "views", "functions"];
+const MORE_TABS: ObjectTab[] = ["materialized_views", "sequences", "triggers", "procedures"];
+
+const TAB_LABELS: Record<ObjectTab, string> = {
+  tables: "Tables",
+  views: "Views",
+  functions: "Functions",
+  materialized_views: "Materialized Views",
+  sequences: "Sequences",
+  triggers: "Triggers",
+  procedures: "Procedures",
+};
 
 const REDIS_TABS = ["keys", "lists", "hashes", "sets", "sorted-sets"] as const;
 type RedisTab = (typeof REDIS_TABS)[number];
@@ -46,6 +61,10 @@ export function ObjectPanel(props: Props) {
   const [tables, setTables] = createSignal<string[]>([]);
   const [views, setViews] = createSignal<string[]>([]);
   const [functions, setFunctions] = createSignal<string[]>([]);
+  const [materializedViews, setMaterializedViews] = createSignal<string[]>([]);
+  const [sequences, setSequences] = createSignal<string[]>([]);
+  const [triggers, setTriggers] = createSignal<string[]>([]);
+  const [procedures, setProcedures] = createSignal<string[]>([]);
   const [loading, setLoading] = createSignal(false);
   const [error, setError] = createSignal<string | null>(null);
   const [contextMenu, setContextMenu] = createSignal<{
@@ -54,20 +73,33 @@ export function ObjectPanel(props: Props) {
     items: ContextMenuItem[];
   } | null>(null);
   const [redisTab, setRedisTab] = createSignal<RedisTab>("keys");
+  const [moreOpen, setMoreOpen] = createSignal(false);
+
+  let moreRef: HTMLDivElement | undefined;
 
   const isRedis = () => props.context?.dbType === "redis";
 
-  const counts = (): ObjectCounts => ({
-    tables: tables().length,
-    views: views().length,
-    functions: functions().length,
-  });
+  const getCount = (tab: ObjectTab): number => {
+    switch (tab) {
+      case "tables": return tables().length;
+      case "views": return views().length;
+      case "functions": return functions().length;
+      case "materialized_views": return materializedViews().length;
+      case "sequences": return sequences().length;
+      case "triggers": return triggers().length;
+      case "procedures": return procedures().length;
+    }
+  };
 
   const currentList = (): string[] => {
     switch (activeTab()) {
       case "tables": return tables();
       case "views": return views();
       case "functions": return functions();
+      case "materialized_views": return materializedViews();
+      case "sequences": return sequences();
+      case "triggers": return triggers();
+      case "procedures": return procedures();
     }
   };
 
@@ -77,19 +109,31 @@ export function ObjectPanel(props: Props) {
     setTables([]);
     setViews([]);
     setFunctions([]);
+    setMaterializedViews([]);
+    setSequences([]);
+    setTriggers([]);
+    setProcedures([]);
 
     try {
       await switchDatabase(ctx.connectionId, ctx.database);
 
-      const [t, v, f] = await Promise.all([
+      const [t, v, f, mv, seq, trg, proc] = await Promise.all([
         listTables(ctx.connectionId, ctx.database, ctx.schema),
         listViews(ctx.connectionId, ctx.database, ctx.schema),
         listFunctions(ctx.connectionId, ctx.database, ctx.schema),
+        listMaterializedViews(ctx.connectionId, ctx.database, ctx.schema),
+        listSequences(ctx.connectionId, ctx.database, ctx.schema),
+        listTriggers(ctx.connectionId, ctx.database, ctx.schema),
+        listProcedures(ctx.connectionId, ctx.database, ctx.schema),
       ]);
 
       setTables(t);
       setViews(v);
       setFunctions(f);
+      setMaterializedViews(mv);
+      setSequences(seq);
+      setTriggers(trg);
+      setProcedures(proc);
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
     } finally {
@@ -111,6 +155,10 @@ export function ObjectPanel(props: Props) {
           setTables([]);
           setViews([]);
           setFunctions([]);
+          setMaterializedViews([]);
+          setSequences([]);
+          setTriggers([]);
+          setProcedures([]);
           return;
         }
         loadObjects(props.context);
@@ -118,14 +166,24 @@ export function ObjectPanel(props: Props) {
     ),
   );
 
+  // Close "More" dropdown on outside click
+  const handleClickOutside = (e: MouseEvent) => {
+    if (moreOpen() && moreRef && !moreRef.contains(e.target as Node)) {
+      setMoreOpen(false);
+    }
+  };
+  document.addEventListener("mousedown", handleClickOutside);
+  onCleanup(() => document.removeEventListener("mousedown", handleClickOutside));
+
   const handleObjectClick = (name: string) => {
     const ctx = props.context;
     if (!ctx) return;
 
-    if (activeTab() === "functions") {
+    const tab = activeTab();
+    if (tab === "functions" || tab === "procedures") {
       props.onFunctionSelect(ctx.connectionId, ctx.database, ctx.schema, name);
     } else {
-      // Tables and views both use onTableSelect
+      // Tables, views, materialized views use onTableSelect
       props.onTableSelect(ctx.connectionId, ctx.database, ctx.schema, name);
     }
   };
@@ -179,8 +237,21 @@ export function ObjectPanel(props: Props) {
       case "tables": return tableSvg;
       case "views": return eyeSvg;
       case "functions": return functionSvg;
+      case "materialized_views": return stackSvg;
+      case "sequences": return listNumbersSvg;
+      case "triggers": return lightningSvg;
+      case "procedures": return gearSvg;
     }
   };
+
+  const isMoreTabActive = () => MORE_TABS.includes(activeTab());
+
+  const handleMoreTabSelect = (tab: ObjectTab) => {
+    setActiveTab(tab);
+    setMoreOpen(false);
+  };
+
+  const moreTabsTotal = () => MORE_TABS.reduce((sum, tab) => sum + getCount(tab), 0);
 
   return (
     <div class="object-panel">
@@ -199,18 +270,43 @@ export function ObjectPanel(props: Props) {
         <Show when={isRedis()} fallback={
           <>
             <div class="object-tabs">
-              <For each={["tables", "views", "functions"] as ObjectTab[]}>
+              <For each={PRIMARY_TABS}>
                 {(tab) => (
                   <button
                     class={`object-tab ${activeTab() === tab ? "active" : ""}`}
                     onClick={() => setActiveTab(tab)}
                   >
                     <Icon svg={getTabIcon(tab)} size={12} />
-                    <span>{tab.charAt(0).toUpperCase() + tab.slice(1)}</span>
-                    <span class="object-tab-count">{counts()[tab]}</span>
+                    <span>{TAB_LABELS[tab]}</span>
+                    <span class="object-tab-count">{getCount(tab)}</span>
                   </button>
                 )}
               </For>
+              <div class="object-tab-more-wrapper" ref={moreRef}>
+                <button
+                  class="object-tab"
+                  onClick={() => setMoreOpen(!moreOpen())}
+                  title="More object types"
+                >
+                  <Icon svg={isMoreTabActive() ? getTabIcon(activeTab()) : dotsThreeSvg} size={12} />
+                </button>
+                <Show when={moreOpen()}>
+                  <div class="object-more-dropdown">
+                    <For each={MORE_TABS}>
+                      {(tab) => (
+                        <button
+                          class={`object-more-item ${activeTab() === tab ? "active" : ""}`}
+                          onClick={() => handleMoreTabSelect(tab)}
+                        >
+                          <Icon svg={getTabIcon(tab)} size={12} />
+                          <span>{TAB_LABELS[tab]}</span>
+                          <span class="object-tab-count">{getCount(tab)}</span>
+                        </button>
+                      )}
+                    </For>
+                  </div>
+                </Show>
+              </div>
             </div>
 
             <div class="object-list">
@@ -223,7 +319,7 @@ export function ObjectPanel(props: Props) {
               <Show when={!loading() && !error()}>
                 <Show when={currentList().length === 0}>
                   <div class="object-empty">
-                    No {activeTab()}
+                    No {TAB_LABELS[activeTab()].toLowerCase()}
                   </div>
                 </Show>
                 <For each={currentList()}>

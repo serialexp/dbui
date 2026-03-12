@@ -64,6 +64,48 @@ pub async fn get_function_definition(
     Err("SQLite does not support user-defined functions in the schema".to_string())
 }
 
+pub async fn list_materialized_views(
+    _pool: &sqlx::SqlitePool,
+    _database: &str,
+    _schema: &str,
+) -> Result<Vec<String>, String> {
+    // SQLite does not support materialized views
+    Ok(vec![])
+}
+
+pub async fn list_sequences(
+    _pool: &sqlx::SqlitePool,
+    _database: &str,
+    _schema: &str,
+) -> Result<Vec<String>, String> {
+    // SQLite does not have sequences
+    Ok(vec![])
+}
+
+pub async fn list_triggers(
+    pool: &sqlx::SqlitePool,
+    _database: &str,
+    _schema: &str,
+) -> Result<Vec<String>, String> {
+    let rows = sqlx::query(
+        "SELECT name FROM sqlite_master WHERE type = 'trigger' ORDER BY name",
+    )
+    .fetch_all(pool)
+    .await
+    .map_err(|e| format!("Failed to list triggers: {}", e))?;
+
+    Ok(rows.iter().map(|r| r.get("name")).collect())
+}
+
+pub async fn list_procedures(
+    _pool: &sqlx::SqlitePool,
+    _database: &str,
+    _schema: &str,
+) -> Result<Vec<String>, String> {
+    // SQLite does not have stored procedures
+    Ok(vec![])
+}
+
 pub async fn list_columns(
     pool: &sqlx::SqlitePool,
     _database: &str,

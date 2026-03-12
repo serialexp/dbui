@@ -120,6 +120,78 @@ pub async fn get_function_definition(
     })
 }
 
+pub async fn list_materialized_views(
+    pool: &sqlx::PgPool,
+    _database: &str,
+    schema: &str,
+) -> Result<Vec<String>, String> {
+    let rows = sqlx::query(
+        "SELECT matviewname FROM pg_matviews
+         WHERE schemaname = $1
+         ORDER BY matviewname",
+    )
+    .bind(schema)
+    .fetch_all(pool)
+    .await
+    .map_err(|e| format!("Failed to list materialized views: {}", e))?;
+
+    Ok(rows.iter().map(|r| r.get("matviewname")).collect())
+}
+
+pub async fn list_sequences(
+    pool: &sqlx::PgPool,
+    _database: &str,
+    schema: &str,
+) -> Result<Vec<String>, String> {
+    let rows = sqlx::query(
+        "SELECT sequence_name FROM information_schema.sequences
+         WHERE sequence_schema = $1
+         ORDER BY sequence_name",
+    )
+    .bind(schema)
+    .fetch_all(pool)
+    .await
+    .map_err(|e| format!("Failed to list sequences: {}", e))?;
+
+    Ok(rows.iter().map(|r| r.get("sequence_name")).collect())
+}
+
+pub async fn list_triggers(
+    pool: &sqlx::PgPool,
+    _database: &str,
+    schema: &str,
+) -> Result<Vec<String>, String> {
+    let rows = sqlx::query(
+        "SELECT DISTINCT trigger_name FROM information_schema.triggers
+         WHERE trigger_schema = $1
+         ORDER BY trigger_name",
+    )
+    .bind(schema)
+    .fetch_all(pool)
+    .await
+    .map_err(|e| format!("Failed to list triggers: {}", e))?;
+
+    Ok(rows.iter().map(|r| r.get("trigger_name")).collect())
+}
+
+pub async fn list_procedures(
+    pool: &sqlx::PgPool,
+    _database: &str,
+    schema: &str,
+) -> Result<Vec<String>, String> {
+    let rows = sqlx::query(
+        "SELECT routine_name FROM information_schema.routines
+         WHERE routine_schema = $1 AND routine_type = 'PROCEDURE'
+         ORDER BY routine_name",
+    )
+    .bind(schema)
+    .fetch_all(pool)
+    .await
+    .map_err(|e| format!("Failed to list procedures: {}", e))?;
+
+    Ok(rows.iter().map(|r| r.get("routine_name")).collect())
+}
+
 pub async fn list_columns(
     pool: &sqlx::PgPool,
     _database: &str,

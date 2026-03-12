@@ -331,38 +331,13 @@ export function ConnectDialog(props: Props) {
         {/* Step 2: Select databases/schemas */}
         <Show when={step() === "select" && !loading()}>
           <div class="connect-dialog-select">
-            <div class="connect-dialog-picker">
-              {/* Left column: databases */}
-              <div class="connect-dialog-picker-col">
-                <div class="connect-dialog-picker-label">Databases</div>
-                <div class="connect-dialog-picker-list">
-                  <For each={databaseList()}>
-                    {(db) => (
-                      <div
-                        class="connect-dialog-picker-item"
-                        classList={{
-                          active: selectedDatabase() === db,
-                          "has-checked": hasCheckedSchema(db),
-                        }}
-                        onClick={() => setSelectedDatabase(db)}
-                      >
-                        <span>{db}</span>
-                      </div>
-                    )}
-                  </For>
-                </div>
-              </div>
-
-              {/* Right column: schemas for selected database */}
-              <div class="connect-dialog-picker-col">
-                <div class="connect-dialog-picker-label">
-                  {hasSchemas() ? "Schemas" : "Select"}
-                </div>
-                <div class="connect-dialog-picker-list">
-                  <Show when={selectedDatabase()} fallback={
-                    <div class="connect-dialog-empty">Select a database</div>
-                  }>
-                    <For each={schemasForSelected()}>
+            <div class="connect-dialog-picker" classList={{ "single-column": !hasSchemas() }}>
+              <Show when={hasSchemas()} fallback={
+                /* Single column for MySQL/SQLite/Redis: click to toggle */
+                <div class="connect-dialog-picker-col">
+                  <div class="connect-dialog-picker-label">Databases</div>
+                  <div class="connect-dialog-picker-list">
+                    <For each={entries().map((e, i) => ({ entry: e, index: i }))}>
                       {({ entry, index }) => (
                         <div
                           class="connect-dialog-picker-item"
@@ -372,16 +347,65 @@ export function ConnectDialog(props: Props) {
                           }}
                           onClick={() => !entry.alreadyExists && toggleEntry(index)}
                         >
-                          <span>{entry.schema || entry.database}</span>
+                          <span>{entry.database}</span>
                           <Show when={entry.alreadyExists}>
                             <span class="connect-dialog-already">connected</span>
                           </Show>
                         </div>
                       )}
                     </For>
-                  </Show>
+                  </div>
                 </div>
-              </div>
+              }>
+                {/* Left column: databases */}
+                <div class="connect-dialog-picker-col">
+                  <div class="connect-dialog-picker-label">Databases</div>
+                  <div class="connect-dialog-picker-list">
+                    <For each={databaseList()}>
+                      {(db) => (
+                        <div
+                          class="connect-dialog-picker-item"
+                          classList={{
+                            active: selectedDatabase() === db,
+                            "has-checked": hasCheckedSchema(db),
+                          }}
+                          onClick={() => setSelectedDatabase(db)}
+                        >
+                          <span>{db}</span>
+                        </div>
+                      )}
+                    </For>
+                  </div>
+                </div>
+
+                {/* Right column: schemas for selected database */}
+                <div class="connect-dialog-picker-col">
+                  <div class="connect-dialog-picker-label">Schemas</div>
+                  <div class="connect-dialog-picker-list">
+                    <Show when={selectedDatabase()} fallback={
+                      <div class="connect-dialog-empty">Select a database</div>
+                    }>
+                      <For each={schemasForSelected()}>
+                        {({ entry, index }) => (
+                          <div
+                            class="connect-dialog-picker-item"
+                            classList={{
+                              checked: entry.checked,
+                              disabled: entry.alreadyExists,
+                            }}
+                            onClick={() => !entry.alreadyExists && toggleEntry(index)}
+                          >
+                            <span>{entry.schema}</span>
+                            <Show when={entry.alreadyExists}>
+                              <span class="connect-dialog-already">connected</span>
+                            </Show>
+                          </div>
+                        )}
+                      </For>
+                    </Show>
+                  </div>
+                </div>
+              </Show>
             </div>
 
             {/* Selected combinations summary */}

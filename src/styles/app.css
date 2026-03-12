@@ -17,7 +17,7 @@
   --success-color: #4ec9b0;
   --null-color: #858585;
 
-  --sidebar-width: 280px;
+  --sidebar-width: 300px;
   --header-height: 36px;
 }
 
@@ -316,6 +316,52 @@ body {
   font-size: 10px;
 }
 
+.object-tab-more-wrapper {
+  position: relative;
+  margin-left: auto;
+}
+
+.object-tab-more-wrapper > .object-tab {
+  color: var(--text-tertiary);
+}
+
+.object-more-dropdown {
+  position: absolute;
+  top: 100%;
+  right: 0;
+  z-index: 50;
+  min-width: 180px;
+  background: var(--bg-primary);
+  border: 1px solid var(--border-color);
+  border-radius: 4px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+  padding: 4px 0;
+}
+
+.object-more-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 6px 12px;
+  background: transparent;
+  border: none;
+  color: var(--text-secondary);
+  cursor: pointer;
+  font-size: 11px;
+  white-space: nowrap;
+  text-align: left;
+}
+
+.object-more-item:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+
+.object-more-item.active {
+  color: var(--accent-color);
+}
+
 .object-list {
   flex: 1;
   overflow-y: auto;
@@ -367,14 +413,15 @@ body {
 }
 
 .object-item-actions {
-  display: none;
+  display: flex;
   align-items: center;
   gap: 2px;
   flex-shrink: 0;
+  visibility: hidden;
 }
 
 .object-item:hover .object-item-actions {
-  display: flex;
+  visibility: visible;
 }
 
 .object-item-actions button {
@@ -553,6 +600,10 @@ body {
 
 .connect-dialog-picker-col:first-child {
   border-right: 1px solid var(--border-color);
+}
+
+.connect-dialog-picker.single-column .connect-dialog-picker-col:first-child {
+  border-right: none;
 }
 
 .connect-dialog-picker-label {
