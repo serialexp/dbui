@@ -9,6 +9,7 @@ import {
   extractQueryTable,
   listConnections,
   getFunctionDefinition,
+  getViewDefinition,
   saveQueryHistory,
   listColumns,
   listIndexes,
@@ -414,6 +415,43 @@ ORDER BY user;`;
     }
   };
 
+  const handleViewDefinitionSelect = async (
+    connectionId: string,
+    database: string,
+    schema: string,
+    viewName: string
+  ) => {
+    const existing = findExistingTab(connectionId, database, schema, viewName, "function");
+    if (existing) {
+      setActiveTab(existing.id);
+      return;
+    }
+
+    const connections = await listConnections();
+    const conn = connections.find((c) => c.id === connectionId);
+    if (!conn) return;
+
+    try {
+      const info = await getViewDefinition(connectionId, database, schema, viewName);
+
+      createTab({
+        connectionId,
+        connectionName: conn.name,
+        dbType: conn.db_type,
+        categoryColor: null,
+        database,
+        schema,
+        table: viewName,
+        viewType: "function",
+        functionInfo: info,
+        metadataView: null,
+        selectedCell: null,
+      });
+    } catch (err) {
+      console.error("Failed to load view definition:", err);
+    }
+  };
+
   const handleExecute = async (
     queryToExecute: string,
     preserveTableContext = false
@@ -734,6 +772,7 @@ ORDER BY user;`;
         onQueryGenerate={handleQueryGenerate}
         onMetadataSelect={handleMetadataSelect}
         onFunctionSelect={handleFunctionSelect}
+        onViewDefinitionSelect={handleViewDefinitionSelect}
         onCategoryColorChange={handleCategoryColorChange}
         onShowProcesses={handleShowProcesses}
         onShowUsers={handleShowUsers}

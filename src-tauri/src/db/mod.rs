@@ -370,6 +370,30 @@ impl ConnectionManager {
         }
     }
 
+    pub async fn get_view_definition(
+        &self,
+        connection_id: &str,
+        database: &str,
+        schema: &str,
+        view_name: &str,
+    ) -> Result<FunctionInfo, String> {
+        let pool = self.get_pool(connection_id).await?;
+        match pool.as_ref() {
+            ConnectionPool::Postgres(p) => {
+                postgres::get_view_definition(p, database, schema, view_name).await
+            }
+            ConnectionPool::Mysql(p) => {
+                mysql::get_view_definition(p, database, schema, view_name).await
+            }
+            ConnectionPool::Sqlite(p) => {
+                sqlite::get_view_definition(p, database, schema, view_name).await
+            }
+            ConnectionPool::Redis(c) => {
+                redis_db::get_view_definition(&mut c.clone(), database, schema, view_name).await
+            }
+        }
+    }
+
     pub async fn list_columns(
         &self,
         connection_id: &str,

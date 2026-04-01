@@ -155,6 +155,15 @@ export async function getFunctionDefinition(
   return invoke("get_function_definition", { connectionId, database, schema, functionName });
 }
 
+export async function getViewDefinition(
+  connectionId: string,
+  database: string,
+  schema: string,
+  viewName: string
+): Promise<FunctionInfo> {
+  return invoke("get_view_definition", { connectionId, database, schema, viewName });
+}
+
 export async function listColumns(
   connectionId: string,
   database: string,

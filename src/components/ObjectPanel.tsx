@@ -31,11 +31,13 @@ import dotsThreeSvg from "@phosphor-icons/core/assets/bold/dots-three-bold.svg?r
 import stackSvg from "@phosphor-icons/core/assets/regular/stack.svg?raw";
 import listNumbersSvg from "@phosphor-icons/core/assets/regular/list-numbers.svg?raw";
 import gearSvg from "@phosphor-icons/core/assets/regular/gear-six.svg?raw";
+import codeSvg from "@phosphor-icons/core/assets/regular/code.svg?raw";
 
 interface Props {
   context: WorkingContext | null;
   onTableSelect: (connectionId: string, database: string, schema: string, table: string) => void;
   onFunctionSelect: (connectionId: string, database: string, schema: string, functionName: string) => void;
+  onViewDefinitionSelect: (connectionId: string, database: string, schema: string, viewName: string) => void;
   onMetadataSelect: (view: MetadataView) => void;
   onQueryGenerate: (query: string) => void;
 }
@@ -352,6 +354,20 @@ export function ObjectPanel(props: Props) {
                             onClick={(e) => { e.stopPropagation(); openMetadata(name, "constraints"); }}
                           >
                             <Icon svg={lockSvg} size={12} />
+                          </button>
+                        </span>
+                      </Show>
+                      <Show when={activeTab() === "views" || activeTab() === "materialized_views"}>
+                        <span class="object-item-actions">
+                          <button
+                            title="View definition"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              const ctx = props.context;
+                              if (ctx) props.onViewDefinitionSelect(ctx.connectionId, ctx.database, ctx.schema, name);
+                            }}
+                          >
+                            <Icon svg={codeSvg} size={12} />
                           </button>
                         </span>
                       </Show>

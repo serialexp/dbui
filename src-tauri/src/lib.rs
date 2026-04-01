@@ -42,6 +42,7 @@ pub fn run() {
             list_triggers,
             list_procedures,
             get_function_definition,
+            get_view_definition,
             list_columns,
             list_indexes,
             list_constraints,

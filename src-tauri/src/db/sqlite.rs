@@ -64,6 +64,28 @@ pub async fn get_function_definition(
     Err("SQLite does not support user-defined functions in the schema".to_string())
 }
 
+pub async fn get_view_definition(
+    pool: &sqlx::SqlitePool,
+    _database: &str,
+    _schema: &str,
+    view_name: &str,
+) -> Result<FunctionInfo, String> {
+    let row = sqlx::query("SELECT sql FROM sqlite_master WHERE type = 'view' AND name = ?")
+        .bind(view_name)
+        .fetch_one(pool)
+        .await
+        .map_err(|e| format!("Failed to get view definition: {}", e))?;
+
+    let definition: String = row.get("sql");
+
+    Ok(FunctionInfo {
+        name: view_name.to_string(),
+        definition,
+        return_type: None,
+        language: Some("SQL".to_string()),
+    })
+}
+
 pub async fn list_materialized_views(
     _pool: &sqlx::SqlitePool,
     _database: &str,

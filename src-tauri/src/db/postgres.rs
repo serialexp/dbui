@@ -68,6 +68,35 @@ pub async fn list_views(
     Ok(rows.iter().map(|r| r.get("table_name")).collect())
 }
 
+pub async fn get_view_definition(
+    pool: &sqlx::PgPool,
+    _database: &str,
+    schema: &str,
+    view_name: &str,
+) -> Result<super::FunctionInfo, String> {
+    let row = sqlx::query(
+        "SELECT pg_get_viewdef(c.oid, true) as definition
+         FROM pg_class c
+         JOIN pg_namespace n ON c.relnamespace = n.oid
+         WHERE n.nspname = $1 AND c.relname = $2
+           AND c.relkind IN ('v', 'm')",
+    )
+    .bind(schema)
+    .bind(view_name)
+    .fetch_one(pool)
+    .await
+    .map_err(|e| format!("Failed to get view definition: {}", e))?;
+
+    let definition: String = row.get("definition");
+
+    Ok(super::FunctionInfo {
+        name: view_name.to_string(),
+        definition: format!("CREATE OR REPLACE VIEW {}.{} AS\n{}", schema, view_name, definition),
+        return_type: None,
+        language: Some("SQL".to_string()),
+    })
+}
+
 pub async fn list_functions(
     pool: &sqlx::PgPool,
     _database: &str,

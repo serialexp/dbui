@@ -284,6 +284,18 @@ pub async fn get_function_definition(
 }
 
 #[tauri::command]
+pub async fn get_view_definition(
+    connection_id: String,
+    database: String,
+    schema: String,
+    view_name: String,
+) -> Result<FunctionInfo, String> {
+    get_manager()
+        .get_view_definition(&connection_id, &database, &schema, &view_name)
+        .await
+}
+
+#[tauri::command]
 pub async fn list_columns(
     connection_id: String,
     database: String,

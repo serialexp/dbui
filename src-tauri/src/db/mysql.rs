@@ -83,6 +83,28 @@ pub async fn list_views(
     Ok(rows.iter().map(|r| get_str(r, 0)).collect())
 }
 
+pub async fn get_view_definition(
+    pool: &sqlx::MySqlPool,
+    database: &str,
+    _schema: &str,
+    view_name: &str,
+) -> Result<super::FunctionInfo, String> {
+    let query = format!("SHOW CREATE VIEW `{}`.`{}`", database, view_name);
+    let row = sqlx::query(&query)
+        .fetch_one(pool)
+        .await
+        .map_err(|e| format!("Failed to get view definition: {}", e))?;
+
+    let definition: String = get_str(&row, 1);
+
+    Ok(super::FunctionInfo {
+        name: view_name.to_string(),
+        definition,
+        return_type: None,
+        language: Some("SQL".to_string()),
+    })
+}
+
 pub async fn list_functions(
     pool: &sqlx::MySqlPool,
     database: &str,

@@ -72,6 +72,15 @@ pub async fn get_function_definition(
     Err("Redis does not support functions in the traditional sense".to_string())
 }
 
+pub async fn get_view_definition(
+    _conn: &mut ConnectionManager,
+    _database: &str,
+    _schema: &str,
+    _view_name: &str,
+) -> Result<FunctionInfo, String> {
+    Err("Redis does not support views".to_string())
+}
+
 pub async fn list_materialized_views(
     _conn: &mut ConnectionManager,
     _database: &str,
