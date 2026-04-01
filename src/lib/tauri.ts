@@ -310,3 +310,10 @@ export async function getKubeSecretValue(
 export async function parseConnectionUrl(url: string): Promise<ParsedConnection> {
   return invoke("parse_connection_url", { url });
 }
+
+export async function extractQueryTable(
+  query: string,
+  dbType: string
+): Promise<{ schema: string | null; table: string } | null> {
+  return invoke("extract_query_table", { query, dbType });
+}

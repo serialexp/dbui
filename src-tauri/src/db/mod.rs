@@ -445,12 +445,13 @@ impl ConnectionManager {
 
 /// Returns true if the query modifies data and won't return rows.
 /// Queries with RETURNING clauses are excluded since they produce result sets.
-fn is_dml(query: &str) -> bool {
+fn returns_rows(query: &str) -> bool {
     let trimmed = query.trim();
     let upper = trimmed.to_uppercase();
 
+    // INSERT/DELETE/UPDATE with RETURNING clause produce result sets
     if upper.contains("RETURNING") {
-        return false;
+        return true;
     }
 
     let first_word = upper
@@ -459,20 +460,20 @@ fn is_dml(query: &str) -> bool {
         .unwrap_or("");
     matches!(
         first_word,
-        "INSERT"
-            | "UPDATE"
-            | "DELETE"
-            | "CREATE"
-            | "ALTER"
-            | "DROP"
-            | "TRUNCATE"
-            | "GRANT"
-            | "REVOKE"
+        "SELECT"
+            | "SHOW"
+            | "DESCRIBE"
+            | "DESC"
+            | "EXPLAIN"
+            | "PRAGMA"
+            | "TABLE"
+            | "VALUES"
+            | "WITH"
     )
 }
 
 async fn execute_query_pg(pool: &sqlx::PgPool, query: &str) -> Result<QueryResult, String> {
-    if is_dml(query) {
+    if !returns_rows(query) {
         let result = sqlx::query(query)
             .execute(pool)
             .await
@@ -483,7 +484,7 @@ async fn execute_query_pg(pool: &sqlx::PgPool, query: &str) -> Result<QueryResul
         return Ok(QueryResult {
             columns: vec![],
             rows: vec![],
-            row_count: 0,
+            row_count: rows_affected as usize,
             message: Some(format!("{} row(s) affected.", rows_affected)),
         });
     }
@@ -593,8 +594,10 @@ fn pg_value_to_json(
 }
 
 async fn execute_query_mysql(pool: &sqlx::MySqlPool, query: &str) -> Result<QueryResult, String> {
-    if is_dml(query) {
-        let result = sqlx::query(query)
+    // Use raw_sql to avoid prepared statements — MySQL's prepared statement
+    // protocol doesn't support many statement types (SET, KILL, etc.).
+    if !returns_rows(query) {
+        let result = sqlx::raw_sql(query)
             .execute(pool)
             .await
             .map_err(|e| format!("Query failed: {}", e))?;
@@ -604,12 +607,12 @@ async fn execute_query_mysql(pool: &sqlx::MySqlPool, query: &str) -> Result<Quer
         return Ok(QueryResult {
             columns: vec![],
             rows: vec![],
-            row_count: 0,
+            row_count: rows_affected as usize,
             message: Some(format!("{} row(s) affected.", rows_affected)),
         });
     }
 
-    let rows = sqlx::query(query)
+    let rows = sqlx::raw_sql(query)
         .fetch_all(pool)
         .await
         .map_err(|e| format!("Query failed: {}", e))?;
@@ -690,7 +693,7 @@ fn mysql_value_to_json(
 }
 
 async fn execute_query_sqlite(pool: &sqlx::SqlitePool, query: &str) -> Result<QueryResult, String> {
-    if is_dml(query) {
+    if !returns_rows(query) {
         let result = sqlx::query(query)
             .execute(pool)
             .await
@@ -701,7 +704,7 @@ async fn execute_query_sqlite(pool: &sqlx::SqlitePool, query: &str) -> Result<Qu
         return Ok(QueryResult {
             columns: vec![],
             rows: vec![],
-            row_count: 0,
+            row_count: rows_affected as usize,
             message: Some(format!("{} row(s) affected.", rows_affected)),
         });
     }

@@ -39,6 +39,8 @@ export function ConnectDialog(props: Props) {
   const [loadingStatus, setLoadingStatus] = createSignal<string>("Connecting...");
   const [error, setError] = createSignal<string | null>(null);
   const [selectedDatabase, setSelectedDatabase] = createSignal<string | null>(null);
+  const [schemasFetched, setSchemasFetched] = createSignal<string[]>([]);
+  const [loadingSchemas, setLoadingSchemas] = createSignal(false);
 
   onMount(async () => {
     try {
@@ -110,32 +112,22 @@ export function ConnectDialog(props: Props) {
           discovered.push({
             database: db,
             schema: "",
-            checked: !props.existingContexts.some((c) => c.id === id),
+            checked: false,
             alreadyExists: props.existingContexts.some((c) => c.id === id),
           });
         }
       } else if (conn.db_type === "postgres") {
-        // Postgres: discover schemas per database.
-        // Must switch database before listing schemas since the backend
-        // queries information_schema on the currently connected database.
+        // Postgres: just list databases now, schemas are fetched lazily
+        // when the user selects a database in the picker.
         for (const db of databases) {
-          try {
-            setLoadingStatus(`Discovering schemas in ${db}...`);
-            await switchDatabase(conn.id, db);
-            const schemas = await listSchemas(conn.id, db);
-            for (const schema of schemas) {
-              const id = makeContextId(conn.id, db, schema);
-              discovered.push({
-                database: db,
-                schema,
-                checked: !props.existingContexts.some((c) => c.id === id),
-                alreadyExists: props.existingContexts.some((c) => c.id === id),
-              });
-            }
-          } catch {
-            // Skip databases we can't connect to
-          }
+          discovered.push({
+            database: db,
+            schema: "",
+            checked: false,
+            alreadyExists: false,
+          });
         }
+        setSchemasFetched([]);
       } else {
         // MySQL: each database is a context, no schemas
         for (const db of databases) {
@@ -143,19 +135,60 @@ export function ConnectDialog(props: Props) {
           discovered.push({
             database: db,
             schema: "",
-            checked: !props.existingContexts.some((c) => c.id === id),
+            checked: false,
             alreadyExists: props.existingContexts.some((c) => c.id === id),
           });
         }
       }
 
       setEntries(discovered);
-      setSelectedDatabase(discovered.length > 0 ? discovered[0].database : null);
+      // For Postgres, don't auto-select — let the user pick which database to explore.
+      // For other types, select the first database.
+      if (conn.db_type !== "postgres") {
+        setSelectedDatabase(discovered.length > 0 ? discovered[0].database : null);
+      } else {
+        setSelectedDatabase(null);
+      }
       setStep("select");
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
     } finally {
       setLoading(false);
+    }
+  };
+
+  const selectDatabase = async (db: string) => {
+    setSelectedDatabase(db);
+    const conn = selectedConnection();
+    if (!conn || conn.db_type !== "postgres") return;
+    if (schemasFetched().includes(db)) return;
+
+    setLoadingSchemas(true);
+    try {
+      await switchDatabase(conn.id, db);
+      const schemas = await listSchemas(conn.id, db);
+
+      // Remove the placeholder entry for this database,
+      // replace with real schema entries.
+      setEntries((prev) => {
+        const without = prev.filter((e) => e.database !== db || e.schema !== "");
+        const newEntries: DiscoveredEntry[] = schemas.map((schema) => {
+          const id = makeContextId(conn.id, db, schema);
+          return {
+            database: db,
+            schema,
+            checked: false,
+            alreadyExists: props.existingContexts.some((c) => c.id === id),
+          };
+        });
+        return [...without, ...newEntries];
+      });
+      setSchemasFetched((prev) => [...prev, db]);
+    } catch {
+      // Database not accessible — remove its placeholder
+      setEntries((prev) => prev.filter((e) => e.database !== db));
+    } finally {
+      setLoadingSchemas(false);
     }
   };
 
@@ -204,13 +237,13 @@ export function ConnectDialog(props: Props) {
     return result;
   };
 
-  /** Schemas for the currently selected database. */
+  /** Schemas for the currently selected database (excludes placeholders). */
   const schemasForSelected = () => {
     const db = selectedDatabase();
     if (!db) return [];
     return entries()
       .map((e, i) => ({ entry: e, index: i }))
-      .filter(({ entry }) => entry.database === db);
+      .filter(({ entry }) => entry.database === db && (entry.schema !== "" || !hasSchemas()));
   };
 
   /** All currently checked entries (for the selection summary). */
@@ -369,7 +402,7 @@ export function ConnectDialog(props: Props) {
                             active: selectedDatabase() === db,
                             "has-checked": hasCheckedSchema(db),
                           }}
-                          onClick={() => setSelectedDatabase(db)}
+                          onClick={() => selectDatabase(db)}
                         >
                           <span>{db}</span>
                         </div>
@@ -385,6 +418,9 @@ export function ConnectDialog(props: Props) {
                     <Show when={selectedDatabase()} fallback={
                       <div class="connect-dialog-empty">Select a database</div>
                     }>
+                      <Show when={loadingSchemas()}>
+                        <div class="connect-dialog-loading">Loading schemas...</div>
+                      </Show>
                       <For each={schemasForSelected()}>
                         {({ entry, index }) => (
                           <div

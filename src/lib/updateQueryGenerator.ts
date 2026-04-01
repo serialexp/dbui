@@ -59,7 +59,8 @@ export function generateUpdateQuery(
       return `${pk} ${formatted}`;
     });
 
-    return `UPDATE ${schema}.${table} SET ${setClauses.join(", ")} WHERE ${whereClauses.join(" AND ")};`;
+    const ref = schema ? `${schema}.${table}` : table;
+    return `UPDATE ${ref} SET ${setClauses.join(", ")} WHERE ${whereClauses.join(" AND ")};`;
   });
 
   return statements.join("\n");

@@ -25,6 +25,7 @@ interface Props {
   onFunctionSelect: (connectionId: string, database: string, schema: string, functionName: string) => void;
   onCategoryColorChange?: (color: string | null) => void;
   onShowProcesses: (ctx: WorkingContext) => void;
+  onShowUsers: (ctx: WorkingContext) => void;
 }
 
 export function Sidebar(props: Props) {
@@ -146,6 +147,7 @@ export function Sidebar(props: Props) {
         onDisconnect={handleDisconnect}
         onConnectClick={() => setShowConnectDialog(true)}
         onShowProcesses={props.onShowProcesses}
+        onShowUsers={props.onShowUsers}
       />
 
       <ObjectPanel

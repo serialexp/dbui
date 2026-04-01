@@ -8,6 +8,7 @@ import type { WorkingContext, Category } from "../lib/types";
 import ejectSvg from "@phosphor-icons/core/assets/regular/eject.svg?raw";
 import plusSvg from "@phosphor-icons/core/assets/regular/plus.svg?raw";
 import listSvg from "@phosphor-icons/core/assets/regular/list.svg?raw";
+import usersSvg from "@phosphor-icons/core/assets/regular/users.svg?raw";
 
 interface Props {
   contexts: WorkingContext[];
@@ -17,6 +18,7 @@ interface Props {
   onDisconnect: (ctx: WorkingContext) => void;
   onConnectClick: () => void;
   onShowProcesses: (ctx: WorkingContext) => void;
+  onShowUsers: (ctx: WorkingContext) => void;
 }
 
 interface GroupedContexts {
@@ -121,6 +123,16 @@ export function DatabaseList(props: Props) {
                   <span class="db-entry-label">{formatLabel(ctx)}</span>
                   <div class="db-entry-actions">
                     <Show when={ctx.dbType === "postgres" || ctx.dbType === "mysql"}>
+                      <button
+                        class="db-entry-action"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          props.onShowUsers(ctx);
+                        }}
+                        title="Show users"
+                      >
+                        <Icon svg={usersSvg} size={12} />
+                      </button>
                       <button
                         class="db-entry-action"
                         onClick={(e) => {

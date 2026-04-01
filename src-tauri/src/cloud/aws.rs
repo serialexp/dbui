@@ -7,7 +7,23 @@ use aws_sdk_secretsmanager::Client as SecretsClient;
 use aws_sdk_ssm::Client as SsmClient;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
+use std::error::Error;
 use std::path::PathBuf;
+
+/// Walk the error source chain and collect all messages into a single string.
+/// AWS SDK errors often have the useful message buried in nested sources.
+fn full_error_message(err: &dyn Error) -> String {
+    let mut messages = vec![err.to_string()];
+    let mut source = err.source();
+    while let Some(s) = source {
+        let msg = s.to_string();
+        if !messages.contains(&msg) {
+            messages.push(msg);
+        }
+        source = s.source();
+    }
+    messages.join(": ")
+}
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AwsProfile {
@@ -147,33 +163,29 @@ pub async fn list_ssm_parameters(
 ) -> Result<Vec<AwsParameter>, String> {
     let client = create_ssm_client(profile, region).await?;
 
+    let mut request = client.describe_parameters().max_results(50);
+
+    if let Some(prefix) = path_prefix {
+        request = request.parameter_filters(
+            aws_sdk_ssm::types::ParameterStringFilter::builder()
+                .key("Name")
+                .option("BeginsWith")
+                .values(prefix)
+                .build()
+                .map_err(|e| format!("Failed to build filter: {}", e))?,
+        );
+    }
+
     let mut params = Vec::new();
-    let mut next_token: Option<String> = None;
+    let mut paginator = request.into_paginator().send();
 
-    loop {
-        let mut request = client.describe_parameters();
-
-        if let Some(prefix) = path_prefix {
-            request = request.parameter_filters(
-                aws_sdk_ssm::types::ParameterStringFilter::builder()
-                    .key("Name")
-                    .option("BeginsWith")
-                    .values(prefix)
-                    .build()
-                    .map_err(|e| format!("Failed to build filter: {}", e))?,
-            );
-        }
-
-        if let Some(token) = next_token.take() {
-            request = request.next_token(token);
-        }
-
-        let response = request.send().await.map_err(|e| {
-            let err_str = e.to_string();
+    while let Some(page) = paginator.next().await {
+        let response = page.map_err(|e| {
+            let err_str = full_error_message(&e);
             if err_str.contains("AccessDenied") || err_str.contains("not authorized") {
                 "Access denied. Check IAM permissions for SSM Parameter Store.".to_string()
             } else {
-                format!("Network error: {}", err_str)
+                format!("AWS error: {}", err_str)
             }
         })?;
 
@@ -185,11 +197,6 @@ pub async fn list_ssm_parameters(
                     last_modified: p.last_modified_date.map(|d| d.to_string()),
                 });
             }
-        }
-
-        next_token = response.next_token;
-        if next_token.is_none() {
-            break;
         }
     }
 
@@ -210,11 +217,11 @@ pub async fn get_ssm_parameter_value(
         .send()
         .await
         .map_err(|e| {
-            let err_str = e.to_string();
+            let err_str = full_error_message(&e);
             if err_str.contains("AccessDenied") || err_str.contains("not authorized") {
                 "Access denied. Check IAM permissions for SSM Parameter Store.".to_string()
             } else {
-                format!("Network error: {}", err_str)
+                format!("AWS error: {}", err_str)
             }
         })?;
 
@@ -228,21 +235,15 @@ pub async fn list_aws_secrets(profile: &str, region: &str) -> Result<Vec<AwsSecr
     let client = create_secrets_client(profile, region).await?;
 
     let mut secrets = Vec::new();
-    let mut next_token: Option<String> = None;
+    let mut paginator = client.list_secrets().max_results(100).into_paginator().send();
 
-    loop {
-        let mut request = client.list_secrets();
-
-        if let Some(token) = next_token.take() {
-            request = request.next_token(token);
-        }
-
-        let response = request.send().await.map_err(|e| {
-            let err_str = e.to_string();
+    while let Some(page) = paginator.next().await {
+        let response = page.map_err(|e| {
+            let err_str = full_error_message(&e);
             if err_str.contains("AccessDenied") || err_str.contains("not authorized") {
                 "Access denied. Check IAM permissions for Secrets Manager.".to_string()
             } else {
-                format!("Network error: {}", err_str)
+                format!("AWS error: {}", err_str)
             }
         })?;
 
@@ -255,11 +256,6 @@ pub async fn list_aws_secrets(profile: &str, region: &str) -> Result<Vec<AwsSecr
                     last_modified: s.last_changed_date.map(|d| d.to_string()),
                 });
             }
-        }
-
-        next_token = response.next_token;
-        if next_token.is_none() {
-            break;
         }
     }
 
@@ -279,11 +275,11 @@ pub async fn get_aws_secret_value(
         .send()
         .await
         .map_err(|e| {
-            let err_str = e.to_string();
+            let err_str = full_error_message(&e);
             if err_str.contains("AccessDenied") || err_str.contains("not authorized") {
                 "Access denied. Check IAM permissions for Secrets Manager.".to_string()
             } else {
-                format!("Network error: {}", err_str)
+                format!("AWS error: {}", err_str)
             }
         })?;
 

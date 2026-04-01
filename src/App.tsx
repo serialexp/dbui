@@ -6,6 +6,7 @@ import { confirm } from "@tauri-apps/plugin-dialog";
 import type { MetadataView, WorkingContext } from "./lib/types";
 import {
   executeQuery,
+  extractQueryTable,
   listConnections,
   getFunctionDefinition,
   saveQueryHistory,
@@ -84,14 +85,22 @@ function AppContent() {
     const conn = connections.find((c) => c.id === connectionId);
     if (!conn) return;
 
-    // Re-use existing tab if one matches
+    // Re-use existing tab if one matches — reset query to default
     const existing = findExistingTab(connectionId, database, schema, table, "data");
     if (existing) {
       setActiveTab(existing.id);
+      const tableRef = schema ? `${schema}.${table}` : table;
+      const defaultQuery = `SELECT * FROM ${tableRef} LIMIT 100;`;
+      updateActiveTab({
+        query: defaultQuery,
+        tableContext: { connectionId, database, schema, table },
+      });
+      await handleExecute(defaultQuery, true);
       return;
     }
 
-    const newQuery = `SELECT * FROM ${schema}.${table} LIMIT 100;`;
+    const tableRef = schema ? `${schema}.${table}` : table;
+    const newQuery = `SELECT * FROM ${tableRef} LIMIT 100;`;
 
     // Create a new tab for the table
     createTab({
@@ -139,6 +148,41 @@ FROM pg_stat_activity
 WHERE state IS NOT NULL
 ORDER BY query_start DESC;`
         : `SHOW FULL PROCESSLIST;`;
+
+    createTab({
+      connectionId: ctx.connectionId,
+      connectionName: conn.name,
+      dbType: ctx.dbType,
+      categoryColor: ctx.categoryColor,
+      database: ctx.database,
+      schema: ctx.schema,
+      table: null,
+      viewType: null,
+      query,
+    });
+
+    const newTab = activeTab();
+    if (newTab) {
+      await handleExecute(query);
+    }
+  };
+
+  const handleShowUsers = async (ctx: WorkingContext) => {
+    const connections = await listConnections();
+    const conn = connections.find((c) => c.id === ctx.connectionId);
+    if (!conn) return;
+
+    const query =
+      ctx.dbType === "postgres"
+        ? `SELECT rolname AS "Role", rolsuper AS "Superuser", rolcreaterole AS "Create Role",
+       rolcreatedb AS "Create DB", rolcanlogin AS "Can Login", rolreplication AS "Replication",
+       rolvaliduntil AS "Valid Until"
+FROM pg_catalog.pg_roles
+ORDER BY rolname;`
+        : `SELECT user AS "User", host AS "Host", account_locked AS "Locked",
+       password_expired AS "Password Expired", password_lifetime AS "Password Lifetime"
+FROM mysql.user
+ORDER BY user;`;
 
     createTab({
       connectionId: ctx.connectionId,
@@ -258,21 +302,22 @@ ORDER BY query_start DESC;`
     if (!tab?.metadataView) return;
 
     const { connectionId, database, schema, table, type } = tab.metadataView;
+    const ref = schema ? `${schema}.${table}` : table;
     let query: string;
     switch (type) {
       case "columns":
         query = names
-          .map((name) => `ALTER TABLE ${schema}.${table} DROP COLUMN ${name};`)
+          .map((name) => `ALTER TABLE ${ref} DROP COLUMN ${name};`)
           .join("\n");
         break;
       case "indexes":
         query = names
-          .map((name) => `DROP INDEX ${schema}.${name};`)
+          .map((name) => schema ? `DROP INDEX ${schema}.${name};` : `DROP INDEX ${name};`)
           .join("\n");
         break;
       case "constraints":
         query = names
-          .map((name) => `ALTER TABLE ${schema}.${table} DROP CONSTRAINT ${name};`)
+          .map((name) => `ALTER TABLE ${ref} DROP CONSTRAINT ${name};`)
           .join("\n");
         break;
     }
@@ -394,10 +439,29 @@ ORDER BY query_start DESC;`
     }
 
     if (!preserveTableContext) {
-      updateActiveTab({
-        tableContext: null,
-        primaryKeyColumns: [],
-      });
+      // Analyze the query to see if it's a simple single-table SELECT.
+      // If so, set (or keep) the table context so delete checkboxes remain available.
+      const tableInfo = tab.dbType
+        ? await extractQueryTable(queryToExecute, tab.dbType).catch(() => null)
+        : null;
+      if (tableInfo) {
+        const tableSchema = tableInfo.schema || sch;
+        updateActiveTab({
+          tableContext: { connectionId: connId, database: db, schema: tableSchema, table: tableInfo.table },
+        });
+        // Fetch primary key columns for the detected table
+        listColumns(connId, db, tableSchema, tableInfo.table)
+          .then((columns) => {
+            const pkCols = columns.filter((c) => c.is_primary_key).map((c) => c.name);
+            updateActiveTab({ primaryKeyColumns: pkCols });
+          })
+          .catch(() => updateActiveTab({ primaryKeyColumns: [] }));
+      } else {
+        updateActiveTab({
+          tableContext: null,
+          primaryKeyColumns: [],
+        });
+      }
     }
 
     updateActiveTab({
@@ -618,7 +682,8 @@ ORDER BY query_start DESC;`
 
     let query: string;
     if (ctx) {
-      query = `SELECT * FROM ${ctx.schema}.${ctx.table} WHERE ${condition} LIMIT 100;`;
+      const tableRef = ctx.schema ? `${ctx.schema}.${ctx.table}` : ctx.table;
+      query = `SELECT * FROM ${tableRef} WHERE ${condition} LIMIT 100;`;
       updateActiveTab({ query });
       handleExecute(query, true);
     } else {
@@ -671,6 +736,7 @@ ORDER BY query_start DESC;`
         onFunctionSelect={handleFunctionSelect}
         onCategoryColorChange={handleCategoryColorChange}
         onShowProcesses={handleShowProcesses}
+        onShowUsers={handleShowUsers}
       />
       <main class="main-content">
         <Show when={store.tabs.length > 0}>

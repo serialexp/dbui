@@ -52,7 +52,8 @@ export function generateDeleteQuery(
     .map((cond, i) => (i === 0 ? cond : `   OR ${cond}`))
     .join("\n");
 
-  return `DELETE FROM ${schema}.${table}\nWHERE ${whereClause};`;
+  const tableRef = schema ? `${schema}.${table}` : table;
+  return `DELETE FROM ${tableRef}\nWHERE ${whereClause};`;
 }
 
 export function parseDeleteQuery(query: string): ParsedDelete | null {
@@ -102,5 +103,6 @@ export function mergeDeleteQuery(
     .map((cond, i) => (i === 0 ? cond : `   OR ${cond}`))
     .join("\n");
 
-  return `DELETE FROM ${parsed.schema}.${parsed.table}\nWHERE ${whereClause};`;
+  const tableRef = parsed.schema ? `${parsed.schema}.${parsed.table}` : parsed.table;
+  return `DELETE FROM ${tableRef}\nWHERE ${whereClause};`;
 }

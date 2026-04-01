@@ -5,6 +5,7 @@ use crate::cloud::{
     self, AwsParameter, AwsProfile, AwsSecret, KubeContext, KubeNamespace, KubeSecret,
     KubeSecretKey, ParsedConnection,
 };
+use crate::sql_analyzer;
 use crate::db::{ColumnInfo, ConnectionManager, ConstraintInfo, FunctionInfo, IndexInfo, QueryResult};
 use crate::history::{HistoryManager, QueryHistoryEntry, QueryHistoryFilter};
 use crate::storage::{self, Category, ConnectionConfig, DatabaseType, SslMode};
@@ -506,4 +507,12 @@ pub async fn get_kube_secret_value(
 #[tauri::command]
 pub fn parse_connection_url(url: String) -> Result<ParsedConnection, String> {
     cloud::parse_connection_url(&url).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub fn extract_query_table(
+    query: String,
+    db_type: String,
+) -> Option<sql_analyzer::QueryTableInfo> {
+    sql_analyzer::extract_single_table(&query, &db_type)
 }

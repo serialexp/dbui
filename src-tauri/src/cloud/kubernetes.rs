@@ -109,7 +109,7 @@ pub async fn list_kube_namespaces(context: &str) -> Result<Vec<KubeNamespace>, S
             if err_str.contains("Forbidden") || err_str.contains("Unauthorized") {
                 "Access denied. Check RBAC permissions for listing namespaces.".to_string()
             } else {
-                format!("Network error: {}", err_str)
+                format!("Kubernetes error: {}", err_str)
             }
         })?;
 
@@ -134,7 +134,7 @@ pub async fn list_kube_secrets(
         if err_str.contains("Forbidden") || err_str.contains("Unauthorized") {
             "Access denied. Check RBAC permissions for listing secrets.".to_string()
         } else {
-            format!("Network error: {}", err_str)
+            format!("Kubernetes error: {}", err_str)
         }
     })?;
 
@@ -170,7 +170,7 @@ pub async fn list_kube_secret_keys(
         } else if err_str.contains("NotFound") {
             format!("Secret '{}' not found in namespace '{}'", secret_name, namespace)
         } else {
-            format!("Network error: {}", err_str)
+            format!("Kubernetes error: {}", err_str)
         }
     })?;
 
@@ -200,7 +200,7 @@ pub async fn get_kube_secret_value(
         } else if err_str.contains("NotFound") {
             format!("Secret '{}' not found in namespace '{}'", secret_name, namespace)
         } else {
-            format!("Network error: {}", err_str)
+            format!("Kubernetes error: {}", err_str)
         }
     })?;
 

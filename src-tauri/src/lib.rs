@@ -5,6 +5,7 @@ mod cloud;
 mod commands;
 mod db;
 mod history;
+mod sql_analyzer;
 mod storage;
 
 use commands::*;
@@ -65,6 +66,7 @@ pub fn run() {
             list_kube_secret_keys,
             get_kube_secret_value,
             parse_connection_url,
+            extract_query_table,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

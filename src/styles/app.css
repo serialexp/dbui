@@ -2750,6 +2750,8 @@ td:has(.cell-edit-input) {
   max-height: 80vh;
   display: flex;
   flex-direction: column;
+  overflow: hidden;
+  padding: 0;
 }
 
 .wizard-progress {
@@ -2809,7 +2811,6 @@ td:has(.cell-edit-input) {
   flex: 1;
   overflow-y: auto;
   padding: 20px;
-  min-height: 300px;
 }
 
 .wizard-description {
@@ -2896,8 +2897,6 @@ td:has(.cell-edit-input) {
 }
 
 .secret-list {
-  max-height: 280px;
-  overflow-y: auto;
   display: flex;
   flex-direction: column;
   gap: 8px;

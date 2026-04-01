@@ -260,7 +260,10 @@ export function ResultsTable(props: Props) {
     if (format === "json") {
       content = exportAsJson(props.result);
     } else {
-      const tableName = props.tableContext?.table ?? "table_name";
+      const ctx = props.tableContext;
+      const tableName = ctx
+        ? (ctx.schema ? `${ctx.schema}.${ctx.table}` : ctx.table)
+        : "table_name";
       content = exportAsSqlInsert(props.result, tableName, props.dbType);
     }
 
