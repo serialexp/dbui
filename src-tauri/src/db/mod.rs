@@ -54,6 +54,13 @@ pub struct FunctionInfo {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ViewDependency {
+    pub view_name: String,
+    pub depends_on: String,
+    pub depends_on_type: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct QueryResult {
     pub columns: Vec<String>,
     pub rows: Vec<Vec<serde_json::Value>>,
@@ -370,6 +377,21 @@ impl ConnectionManager {
         }
     }
 
+    pub async fn get_view_dependencies(
+        &self,
+        connection_id: &str,
+        database: &str,
+        schema: &str,
+    ) -> Result<Vec<ViewDependency>, String> {
+        let pool = self.get_pool(connection_id).await?;
+        match pool.as_ref() {
+            ConnectionPool::Postgres(p) => {
+                postgres::get_view_dependencies(p, database, schema).await
+            }
+            _ => Ok(vec![]),
+        }
+    }
+
     pub async fn get_view_definition(
         &self,
         connection_id: &str,
@@ -556,65 +578,63 @@ fn pg_value_to_json(
     index: usize,
     type_name: &str,
 ) -> serde_json::Value {
-    use sqlx::Row;
+    use sqlx::{Row, ValueRef};
+
+    // Distinguish actual SQL NULL from decode failures
+    if row.try_get_raw(index).map_or(true, |v| v.is_null()) {
+        return serde_json::Value::Null;
+    }
+
     match type_name {
         "BOOL" => row
             .try_get::<bool, _>(index)
-            .ok()
-            .map(serde_json::Value::Bool)
-            .unwrap_or(serde_json::Value::Null),
+            .map(serde_json::Value::Bool),
         "INT2" => row
             .try_get::<i16, _>(index)
-            .ok()
-            .map(|v| serde_json::Value::Number(v.into()))
-            .unwrap_or(serde_json::Value::Null),
+            .map(|v| serde_json::Value::Number(v.into())),
         "INT4" => row
             .try_get::<i32, _>(index)
-            .ok()
-            .map(|v| serde_json::Value::Number(v.into()))
-            .unwrap_or(serde_json::Value::Null),
+            .map(|v| serde_json::Value::Number(v.into())),
         "INT8" => row
             .try_get::<i64, _>(index)
-            .ok()
-            .map(|v| serde_json::Value::Number(v.into()))
-            .unwrap_or(serde_json::Value::Null),
+            .map(|v| serde_json::Value::Number(v.into())),
         "FLOAT4" | "FLOAT8" => row
             .try_get::<f64, _>(index)
-            .ok()
-            .and_then(|v| serde_json::Number::from_f64(v))
-            .map(serde_json::Value::Number)
-            .unwrap_or(serde_json::Value::Null),
+            .map(|v| {
+                serde_json::Number::from_f64(v)
+                    .map(serde_json::Value::Number)
+                    .unwrap_or(serde_json::Value::String(v.to_string()))
+            }),
         "TIMESTAMP" => row
             .try_get::<chrono::NaiveDateTime, _>(index)
-            .ok()
-            .map(|v| serde_json::Value::String(v.to_string()))
-            .unwrap_or(serde_json::Value::Null),
+            .map(|v| serde_json::Value::String(v.to_string())),
         "TIMESTAMPTZ" => row
             .try_get::<chrono::DateTime<chrono::Utc>, _>(index)
-            .ok()
-            .map(|v| serde_json::Value::String(v.to_rfc3339()))
-            .unwrap_or(serde_json::Value::Null),
+            .map(|v| serde_json::Value::String(v.to_rfc3339())),
         "DATE" => row
             .try_get::<chrono::NaiveDate, _>(index)
-            .ok()
-            .map(|v| serde_json::Value::String(v.to_string()))
-            .unwrap_or(serde_json::Value::Null),
+            .map(|v| serde_json::Value::String(v.to_string())),
         "TIME" => row
             .try_get::<chrono::NaiveTime, _>(index)
-            .ok()
-            .map(|v| serde_json::Value::String(v.to_string()))
-            .unwrap_or(serde_json::Value::Null),
+            .map(|v| serde_json::Value::String(v.to_string())),
         "UUID" => row
             .try_get::<uuid::Uuid, _>(index)
-            .ok()
-            .map(|v| serde_json::Value::String(v.to_string()))
-            .unwrap_or(serde_json::Value::Null),
+            .map(|v| serde_json::Value::String(v.to_string())),
+        "JSON" | "JSONB" => row
+            .try_get::<serde_json::Value, _>(index)
+            .map(|v| v),
         _ => row
             .try_get::<String, _>(index)
-            .ok()
-            .map(serde_json::Value::String)
-            .unwrap_or(serde_json::Value::Null),
+            .map(serde_json::Value::String),
     }
+    .unwrap_or_else(|_| {
+        // Non-null value we couldn't decode — try raw bytes, then show type name
+        row.try_get::<Vec<u8>, _>(index)
+            .map(|bytes| serde_json::Value::String(String::from_utf8_lossy(&bytes).into_owned()))
+            .unwrap_or_else(|_| {
+                serde_json::Value::String(format!("<unsupported type: {}>", type_name))
+            })
+    })
 }
 
 async fn execute_query_mysql(pool: &sqlx::MySqlPool, query: &str) -> Result<QueryResult, String> {
@@ -679,41 +699,49 @@ fn mysql_value_to_json(
     index: usize,
     type_name: &str,
 ) -> serde_json::Value {
+    use sqlx::{Row, ValueRef};
+
+    if row.try_get_raw(index).map_or(true, |v| v.is_null()) {
+        return serde_json::Value::Null;
+    }
+
     match type_name {
         "BOOLEAN" | "TINYINT(1)" => row
             .try_get::<bool, _>(index)
-            .ok()
-            .map(serde_json::Value::Bool)
-            .unwrap_or(serde_json::Value::Null),
+            .map(serde_json::Value::Bool),
         "TINYINT" | "SMALLINT" | "MEDIUMINT" | "INT" | "TINYINT UNSIGNED"
         | "SMALLINT UNSIGNED" | "MEDIUMINT UNSIGNED" | "INT UNSIGNED" => row
             .try_get::<i32, _>(index)
-            .ok()
-            .map(|v| serde_json::Value::Number(v.into()))
-            .unwrap_or(serde_json::Value::Null),
+            .map(|v| serde_json::Value::Number(v.into())),
         "BIGINT" | "BIGINT UNSIGNED" => row
             .try_get::<i64, _>(index)
-            .ok()
-            .map(|v| serde_json::Value::Number(v.into()))
-            .unwrap_or(serde_json::Value::Null),
+            .map(|v| serde_json::Value::Number(v.into())),
         "FLOAT" | "DOUBLE" | "DECIMAL" => row
             .try_get::<f64, _>(index)
-            .ok()
-            .and_then(|v| serde_json::Number::from_f64(v))
-            .map(serde_json::Value::Number)
-            .unwrap_or(serde_json::Value::Null),
+            .map(|v| {
+                serde_json::Number::from_f64(v)
+                    .map(serde_json::Value::Number)
+                    .unwrap_or(serde_json::Value::String(v.to_string()))
+            }),
+        "JSON" => row
+            .try_get::<serde_json::Value, _>(index)
+            .map(|v| v),
         _ => row
             .try_get::<String, _>(index)
-            .ok()
-            .or_else(|| {
+            .or_else(|_| {
                 // MySQL over TLS may return string columns as VARBINARY
                 row.try_get::<Vec<u8>, _>(index)
-                    .ok()
                     .map(|bytes| String::from_utf8_lossy(&bytes).into_owned())
             })
-            .map(serde_json::Value::String)
-            .unwrap_or(serde_json::Value::Null),
+            .map(serde_json::Value::String),
     }
+    .unwrap_or_else(|_| {
+        row.try_get::<Vec<u8>, _>(index)
+            .map(|bytes| serde_json::Value::String(String::from_utf8_lossy(&bytes).into_owned()))
+            .unwrap_or_else(|_| {
+                serde_json::Value::String(format!("<unsupported type: {}>", type_name))
+            })
+    })
 }
 
 async fn execute_query_sqlite(pool: &sqlx::SqlitePool, query: &str) -> Result<QueryResult, String> {
@@ -776,27 +804,35 @@ fn sqlite_value_to_json(
     index: usize,
     type_name: &str,
 ) -> serde_json::Value {
+    use sqlx::{Row, ValueRef};
+
+    if row.try_get_raw(index).map_or(true, |v| v.is_null()) {
+        return serde_json::Value::Null;
+    }
+
     match type_name {
         "BOOLEAN" => row
             .try_get::<bool, _>(index)
-            .ok()
-            .map(serde_json::Value::Bool)
-            .unwrap_or(serde_json::Value::Null),
+            .map(serde_json::Value::Bool),
         "INTEGER" => row
             .try_get::<i64, _>(index)
-            .ok()
-            .map(|v| serde_json::Value::Number(v.into()))
-            .unwrap_or(serde_json::Value::Null),
+            .map(|v| serde_json::Value::Number(v.into())),
         "REAL" => row
             .try_get::<f64, _>(index)
-            .ok()
-            .and_then(|v| serde_json::Number::from_f64(v))
-            .map(serde_json::Value::Number)
-            .unwrap_or(serde_json::Value::Null),
+            .map(|v| {
+                serde_json::Number::from_f64(v)
+                    .map(serde_json::Value::Number)
+                    .unwrap_or(serde_json::Value::String(v.to_string()))
+            }),
         _ => row
             .try_get::<String, _>(index)
-            .ok()
-            .map(serde_json::Value::String)
-            .unwrap_or(serde_json::Value::Null),
+            .map(serde_json::Value::String),
     }
+    .unwrap_or_else(|_| {
+        row.try_get::<Vec<u8>, _>(index)
+            .map(|bytes| serde_json::Value::String(String::from_utf8_lossy(&bytes).into_owned()))
+            .unwrap_or_else(|_| {
+                serde_json::Value::String(format!("<unsupported type: {}>", type_name))
+            })
+    })
 }
