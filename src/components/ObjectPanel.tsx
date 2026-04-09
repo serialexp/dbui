@@ -32,12 +32,14 @@ import stackSvg from "@phosphor-icons/core/assets/regular/stack.svg?raw";
 import listNumbersSvg from "@phosphor-icons/core/assets/regular/list-numbers.svg?raw";
 import gearSvg from "@phosphor-icons/core/assets/regular/gear-six.svg?raw";
 import codeSvg from "@phosphor-icons/core/assets/regular/code.svg?raw";
+import flowArrowSvg from "@phosphor-icons/core/assets/regular/flow-arrow.svg?raw";
 
 interface Props {
   context: WorkingContext | null;
   onTableSelect: (connectionId: string, database: string, schema: string, table: string) => void;
   onFunctionSelect: (connectionId: string, database: string, schema: string, functionName: string) => void;
   onViewDefinitionSelect: (connectionId: string, database: string, schema: string, viewName: string) => void;
+  onShowDependencyGraph: (ctx: WorkingContext) => void;
   onMetadataSelect: (view: MetadataView) => void;
   onQueryGenerate: (query: string) => void;
 }
@@ -376,6 +378,18 @@ export function ObjectPanel(props: Props) {
                 </For>
               </Show>
             </div>
+
+            <Show when={(activeTab() === "views" || activeTab() === "materialized_views") && props.context?.dbType === "postgres"}>
+              <div class="object-panel-footer">
+                <button
+                  class="object-panel-footer-btn"
+                  onClick={() => props.context && props.onShowDependencyGraph(props.context)}
+                >
+                  <Icon svg={flowArrowSvg} size={12} />
+                  <span>View Dependencies</span>
+                </button>
+              </div>
+            </Show>
           </>
         }>
           {/* Redis tabs */}

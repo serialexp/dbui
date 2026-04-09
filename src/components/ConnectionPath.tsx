@@ -14,6 +14,7 @@ import lightningSvg from "@phosphor-icons/core/assets/regular/lightning.svg?raw"
 import lockSvg from "@phosphor-icons/core/assets/regular/lock.svg?raw";
 import functionSvg from "@phosphor-icons/core/assets/regular/function.svg?raw";
 import clockCounterClockwiseSvg from "@phosphor-icons/core/assets/regular/clock-counter-clockwise.svg?raw";
+import flowArrowSvg from "@phosphor-icons/core/assets/regular/flow-arrow.svg?raw";
 
 interface Props {
   connectionId: string | null;
@@ -47,7 +48,7 @@ export function ConnectionPath(props: Props) {
     }
   });
 
-  const getViewIcon = (viewType: string) => {
+  const getViewIcon = (viewType: string): string => {
     switch (viewType) {
       case "data":
         return rowsSvg;
@@ -59,8 +60,10 @@ export function ConnectionPath(props: Props) {
         return lockSvg;
       case "function":
         return functionSvg;
+      case "dependencies":
+        return flowArrowSvg;
       default:
-        return null;
+        return rowsSvg;
     }
   };
 

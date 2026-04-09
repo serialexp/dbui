@@ -24,6 +24,7 @@ interface Props {
   onMetadataSelect: (view: MetadataView) => void;
   onFunctionSelect: (connectionId: string, database: string, schema: string, functionName: string) => void;
   onViewDefinitionSelect: (connectionId: string, database: string, schema: string, viewName: string) => void;
+  onShowDependencyGraph: (ctx: WorkingContext) => void;
   onCategoryColorChange?: (color: string | null) => void;
   onShowProcesses: (ctx: WorkingContext) => void;
   onShowUsers: (ctx: WorkingContext) => void;
@@ -156,6 +157,7 @@ export function Sidebar(props: Props) {
         onTableSelect={props.onTableSelect}
         onFunctionSelect={props.onFunctionSelect}
         onViewDefinitionSelect={props.onViewDefinitionSelect}
+        onShowDependencyGraph={props.onShowDependencyGraph}
         onMetadataSelect={props.onMetadataSelect}
         onQueryGenerate={props.onQueryGenerate}
       />

@@ -9,6 +9,7 @@ import type {
   CellSelection,
   MetadataView,
   FunctionInfo,
+  ViewDependency,
   TableContext,
 } from "./types";
 
@@ -26,7 +27,7 @@ export interface Tab {
   database: string | null;
   schema: string | null;
   table: string | null;
-  viewType: "data" | "columns" | "indexes" | "constraints" | "function" | null;
+  viewType: "data" | "columns" | "indexes" | "constraints" | "function" | "dependencies" | null;
 
   // Query state
   query: string;
@@ -46,6 +47,7 @@ export interface Tab {
   // View mode
   metadataView: MetadataView;
   functionInfo: FunctionInfo | null;
+  dependencies: ViewDependency[] | null;
 
   // Edit context
   tableContext: TableContext | null;
@@ -82,6 +84,7 @@ function createDefaultTab(overrides: Partial<Tab> = {}): Tab {
     lastClickedMetadataRow: null,
     metadataView: null,
     functionInfo: null,
+    dependencies: null,
     tableContext: null,
     primaryKeyColumns: [],
     hasPendingChanges: false,
@@ -90,6 +93,9 @@ function createDefaultTab(overrides: Partial<Tab> = {}): Tab {
 }
 
 export function generateTabTitle(tab: Partial<Tab>): string {
+  if (tab.viewType === "dependencies") {
+    return `Dependencies (${tab.schema || tab.database})`;
+  }
   if (tab.functionInfo) {
     return tab.functionInfo.name;
   }
@@ -162,7 +168,8 @@ function createAppStore() {
           "table" in updates ||
           "metadataView" in updates ||
           "functionInfo" in updates ||
-          "viewType" in updates
+          "viewType" in updates ||
+          "dependencies" in updates
         ) {
           tab.title = generateTabTitle(tab);
         }
