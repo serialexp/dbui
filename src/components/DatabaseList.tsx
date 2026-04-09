@@ -37,6 +37,14 @@ export function DatabaseList(props: Props) {
     return iconMap[dbType] || "/icons/postgresql.svg";
   };
 
+  const hasDuplicateDatabase = (ctx: WorkingContext): boolean => {
+    return props.contexts.some(
+      (other) =>
+        other.connectionId !== ctx.connectionId &&
+        other.database === ctx.database
+    );
+  };
+
   const formatLabel = (ctx: WorkingContext): string => {
     if (ctx.dbType === "sqlite") {
       return ctx.connectionName;
@@ -44,10 +52,13 @@ export function DatabaseList(props: Props) {
     if (ctx.dbType === "redis") {
       return `${ctx.connectionName} / ${ctx.database}`;
     }
+    const prefix = hasDuplicateDatabase(ctx)
+      ? `${ctx.connectionName}: `
+      : "";
     if (ctx.dbType === "postgres" && ctx.schema) {
-      return `${ctx.database} / ${ctx.schema}`;
+      return `${prefix}${ctx.database} / ${ctx.schema}`;
     }
-    return ctx.database;
+    return `${prefix}${ctx.database}`;
   };
 
   const grouped = (): GroupedContexts[] => {
