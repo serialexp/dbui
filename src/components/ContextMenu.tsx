@@ -1,12 +1,20 @@
 // ABOUTME: Right-click context menu for tree node actions.
 // ABOUTME: Shows context-sensitive options like Create Database and Create Schema.
 
-import { For, onMount, onCleanup } from "solid-js";
+import { For, Show, onMount, onCleanup } from "solid-js";
 
-export interface ContextMenuItem {
+export interface ContextMenuAction {
+  kind?: "action";
   label: string;
   action: () => void;
 }
+
+export interface ContextMenuHeader {
+  kind: "header";
+  label: string;
+}
+
+export type ContextMenuItem = ContextMenuAction | ContextMenuHeader;
 
 interface Props {
   x: number;
@@ -43,15 +51,22 @@ export function ContextMenu(props: Props) {
     >
       <For each={props.items}>
         {(item) => (
-          <div
-            class="context-menu-item"
-            onClick={() => {
-              item.action();
-              props.onClose();
-            }}
+          <Show
+            when={item.kind === "header"}
+            fallback={
+              <div
+                class="context-menu-item"
+                onClick={() => {
+                  (item as ContextMenuAction).action();
+                  props.onClose();
+                }}
+              >
+                {item.label}
+              </div>
+            }
           >
-            {item.label}
-          </div>
+            <div class="context-menu-header">{item.label}</div>
+          </Show>
         )}
       </For>
     </div>

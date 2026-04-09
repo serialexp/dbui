@@ -10,6 +10,7 @@ import {
   listConnections,
   getFunctionDefinition,
   getViewDefinition,
+  getViewDependencies,
   saveQueryHistory,
   listColumns,
   listIndexes,
@@ -28,6 +29,7 @@ import { ResultsTable } from "./components/ResultsTable";
 import { CellInspector } from "./components/CellInspector";
 import { MetadataTable } from "./components/MetadataTable";
 import { FunctionViewer } from "./components/FunctionViewer";
+import { DependencyGraph } from "./components/DependencyGraph";
 import { ConnectionPath } from "./components/ConnectionPath";
 import { QueryHistory } from "./components/QueryHistory";
 import { TabBar } from "./components/TabBar";
@@ -452,6 +454,50 @@ ORDER BY user;`;
     }
   };
 
+  const handleShowDependencyGraph = async (ctx: WorkingContext) => {
+    // Reuse existing dependency tab for this schema
+    const existing = store.tabs.find(
+      (t) =>
+        t.connectionId === ctx.connectionId &&
+        t.database === ctx.database &&
+        t.schema === ctx.schema &&
+        t.viewType === "dependencies"
+    );
+    if (existing) {
+      setActiveTab(existing.id);
+      return;
+    }
+
+    const connections = await listConnections();
+    const conn = connections.find((c) => c.id === ctx.connectionId);
+    if (!conn) return;
+
+    try {
+      const deps = await getViewDependencies(ctx.connectionId, ctx.database, ctx.schema);
+
+      createTab({
+        connectionId: ctx.connectionId,
+        connectionName: conn.name,
+        dbType: ctx.dbType,
+        categoryColor: ctx.categoryColor,
+        database: ctx.database,
+        schema: ctx.schema,
+        table: null,
+        viewType: "dependencies",
+        dependencies: deps,
+      });
+    } catch (err) {
+      console.error("Failed to load view dependencies:", err);
+    }
+  };
+
+  const handleDependencyRefresh = async () => {
+    const tab = activeTab();
+    if (!tab?.connectionId || !tab.database || !tab.schema) return;
+    const deps = await getViewDependencies(tab.connectionId, tab.database, tab.schema);
+    updateActiveTab({ dependencies: deps });
+  };
+
   const handleExecute = async (
     queryToExecute: string,
     preserveTableContext = false
@@ -703,7 +749,7 @@ ORDER BY user;`;
     }
   };
 
-  const handleFilterByValue = (columnName: string, value: unknown) => {
+  const handleFilterByValue = (columnName: string, value: unknown, mode: "exact" | "prefix" | "suffix" | "contains") => {
     const tab = activeTab();
     if (!tab) return;
 
@@ -711,11 +757,19 @@ ORDER BY user;`;
     let condition: string;
     if (value === null || value === undefined) {
       condition = `${columnName} IS NULL`;
-    } else if (typeof value === "number" || typeof value === "boolean") {
-      condition = `${columnName} = ${value}`;
+    } else if (mode === "exact") {
+      if (typeof value === "number" || typeof value === "boolean") {
+        condition = `${columnName} = ${value}`;
+      } else {
+        const escaped = String(value).replace(/'/g, "''");
+        condition = `${columnName} = '${escaped}'`;
+      }
     } else {
-      const escaped = String(value).replace(/'/g, "''");
-      condition = `${columnName} = '${escaped}'`;
+      const escaped = String(value).replace(/'/g, "''").replace(/%/g, "\\%").replace(/_/g, "\\_");
+      const pattern = mode === "prefix" ? `${escaped}%`
+        : mode === "suffix" ? `%${escaped}`
+        : `%${escaped}%`;
+      condition = `${columnName} LIKE '${pattern}'`;
     }
 
     let query: string;
@@ -773,6 +827,7 @@ ORDER BY user;`;
         onMetadataSelect={handleMetadataSelect}
         onFunctionSelect={handleFunctionSelect}
         onViewDefinitionSelect={handleViewDefinitionSelect}
+        onShowDependencyGraph={handleShowDependencyGraph}
         onCategoryColorChange={handleCategoryColorChange}
         onShowProcesses={handleShowProcesses}
         onShowUsers={handleShowUsers}
@@ -800,7 +855,7 @@ ORDER BY user;`;
             onHistoryClick={() => setShowHistory(true)}
           />
 
-          <Show when={!tab()!.metadataView && !tab()!.functionInfo}>
+          <Show when={!tab()!.metadataView && !tab()!.functionInfo && !tab()!.dependencies}>
             <QueryEditor
               value={tab()!.query}
               onChange={(q) => updateActiveTab({ query: q })}
@@ -835,7 +890,14 @@ ORDER BY user;`;
             />
           </Show>
 
-          <Show when={!tab()!.metadataView && !tab()!.functionInfo}>
+          <Show when={tab()!.dependencies}>
+            <DependencyGraph
+              dependencies={tab()!.dependencies!}
+              onRefresh={handleDependencyRefresh}
+            />
+          </Show>
+
+          <Show when={!tab()!.metadataView && !tab()!.functionInfo && !tab()!.dependencies}>
             <div class="results-area">
               <div class="results-table-wrapper">
                 <ResultsTable

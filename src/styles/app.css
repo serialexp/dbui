@@ -164,6 +164,7 @@ body {
   color: var(--text-tertiary);
   border-left: 3px solid transparent;
   transition: background 0.1s;
+  position: relative;
 }
 
 .db-entry:hover {
@@ -192,11 +193,19 @@ body {
   align-items: center;
   gap: 2px;
   opacity: 0;
+  position: absolute;
+  right: 4px;
+  padding-left: 16px;
+  background: linear-gradient(to right, transparent, var(--bg-hover) 16px);
   transition: opacity 0.15s ease;
 }
 
 .db-entry:hover .db-entry-actions {
   opacity: 1;
+}
+
+.db-entry.active .db-entry-actions {
+  background: linear-gradient(to right, transparent, var(--bg-tertiary) 16px);
 }
 
 .db-entry-action {
@@ -607,6 +616,9 @@ body {
 }
 
 .connect-dialog-picker-label {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
   padding: 6px 12px;
   font-size: 11px;
   font-weight: 600;
@@ -615,6 +627,22 @@ body {
   letter-spacing: 0.3px;
   border-bottom: 1px solid var(--border-color);
   flex-shrink: 0;
+}
+
+.connect-dialog-select-all {
+  font-size: 10px;
+  font-weight: 500;
+  text-transform: none;
+  letter-spacing: normal;
+  color: var(--accent-color);
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 0;
+}
+
+.connect-dialog-select-all:hover {
+  text-decoration: underline;
 }
 
 .connect-dialog-picker-list {
@@ -1042,6 +1070,20 @@ body {
 .context-menu-item:hover {
   background: var(--accent-color);
   color: white;
+}
+
+.context-menu-header {
+  padding: 6px 12px 2px;
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--text-tertiary);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  border-top: 1px solid var(--border-color);
+}
+
+.context-menu-header:first-child {
+  border-top: none;
 }
 
 /* Create Name Dialog */
@@ -1813,6 +1855,12 @@ td:has(.cell-edit-input) {
   color: var(--null-color);
   font-style: italic;
 }
+
+.json-key { color: #9cdcfe; }
+.json-string { color: #ce9178; }
+.json-number { color: #b5cea8; }
+.json-bool { color: #569cd6; }
+.json-null { color: #569cd6; font-style: italic; }
 
 /* Metadata Table */
 .metadata-table {
@@ -3168,4 +3216,131 @@ td:has(.cell-edit-input) {
 
 .empty-state p {
   font-size: 14px;
+}
+
+/* Object Panel Footer */
+.object-panel-footer {
+  padding: 6px 8px;
+  border-top: 1px solid var(--border-color);
+  flex-shrink: 0;
+}
+
+.object-panel-footer-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  padding: 4px 8px;
+  border: none;
+  border-radius: 4px;
+  background: none;
+  color: var(--text-secondary);
+  font-size: 11px;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+}
+
+.object-panel-footer-btn:hover {
+  background: var(--bg-tertiary);
+  color: var(--text-primary);
+}
+
+/* Dependency Graph */
+.dependency-graph {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  overflow: hidden;
+}
+
+.dependency-graph-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--border-color);
+  flex-shrink: 0;
+}
+
+.dependency-graph-legend {
+  display: flex;
+  gap: 16px;
+  align-items: center;
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+.dep-legend-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.dep-legend-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 2px;
+  flex-shrink: 0;
+}
+
+.dependency-graph-content {
+  flex: 1;
+  overflow: auto;
+  padding: 16px;
+}
+
+.dependency-graph-empty {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-secondary);
+  font-size: 13px;
+}
+
+.dep-node {
+  cursor: pointer;
+}
+
+.dep-node-rect {
+  fill: var(--bg-secondary);
+  stroke-width: 1.5;
+  transition: fill 0.15s, stroke-width 0.15s;
+}
+
+.dep-node--hovered {
+  fill: var(--bg-tertiary);
+  stroke-width: 2.5;
+}
+
+.dep-node--connected {
+  fill: var(--bg-tertiary);
+  stroke-width: 2;
+}
+
+.dep-node--dimmed rect,
+.dep-node--dimmed text {
+  opacity: 0.3;
+}
+
+.dep-node-label {
+  fill: var(--text-primary);
+  font-size: 12px;
+  font-family: var(--font-mono, monospace);
+  pointer-events: none;
+}
+
+.dep-edge {
+  stroke: var(--border-color);
+  stroke-width: 1.5;
+  transition: stroke 0.15s, stroke-width 0.15s;
+}
+
+.dep-edge--dimmed {
+  opacity: 0.2;
+}
+
+.dep-edge--highlighted {
+  stroke: var(--accent-color);
+  stroke-width: 2;
 }

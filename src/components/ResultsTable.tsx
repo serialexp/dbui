@@ -7,6 +7,8 @@ import type { RowEdit } from "../lib/updateQueryGenerator";
 import { exportAsJson, exportAsSqlInsert } from "../lib/resultExporter";
 import { readText } from "@tauri-apps/plugin-clipboard-manager";
 import { ContextMenu, type ContextMenuItem } from "./ContextMenu";
+
+export type FilterMode = "exact" | "prefix" | "suffix" | "contains";
 import { Icon } from "./Icon";
 import arrowRightSvg from "@phosphor-icons/core/assets/regular/arrow-right.svg?raw";
 import trashSvg from "@phosphor-icons/core/assets/regular/trash.svg?raw";
@@ -26,7 +28,7 @@ interface Props {
   onGenerateUpdate?: (edits: RowEdit[]) => void;
   onGenerateKill?: (rowIndices: number[]) => void;
   onPendingChangesChange?: (hasPending: boolean) => void;
-  onFilterByValue?: (columnName: string, value: unknown) => void;
+  onFilterByValue?: (columnName: string, value: unknown, mode: FilterMode) => void;
   dbType?: DatabaseType | null;
 }
 
@@ -285,54 +287,75 @@ export function ResultsTable(props: Props) {
     return `'${str}'`;
   };
 
+  const buildFilterItems = (
+    columnName: string,
+    value: unknown,
+    heading: string,
+  ): ContextMenuItem[] => {
+    const isNull = value === null || value === undefined;
+    const preview = formatFilterPreview(value);
+    const items: ContextMenuItem[] = [
+      { kind: "header", label: heading },
+      {
+        label: `= ${preview}`,
+        action: () => props.onFilterByValue!(columnName, value, "exact"),
+      },
+    ];
+    if (!isNull) {
+      items.push(
+        {
+          label: `LIKE ${preview}%`,
+          action: () => props.onFilterByValue!(columnName, value, "prefix"),
+        },
+        {
+          label: `LIKE %${preview}`,
+          action: () => props.onFilterByValue!(columnName, value, "suffix"),
+        },
+        {
+          label: `LIKE %${preview}%`,
+          action: () => props.onFilterByValue!(columnName, value, "contains"),
+        },
+      );
+    }
+    return items;
+  };
+
   const handleCellContextMenu = (
     e: MouseEvent,
     columnName: string,
     cellValue: unknown,
   ) => {
     e.preventDefault();
-    if (!props.onFilterByValue) return;
 
-    const colDisplay = columnName.length > 15 ? columnName.slice(0, 15) + "..." : columnName;
-    const cellPreview = formatFilterPreview(cellValue);
-    const isNull = cellValue === null || cellValue === undefined;
-
+    const copyText = typeof cellValue === "object" && cellValue !== null
+      ? JSON.stringify(cellValue)
+      : String(cellValue ?? "NULL");
     const items: ContextMenuItem[] = [
       {
-        label: `Filter '${colDisplay}' ${isNull ? "IS" : "="} ${cellPreview}`,
-        action: () => props.onFilterByValue!(columnName, cellValue),
+        label: "Copy cell value",
+        action: () => navigator.clipboard.writeText(copyText),
       },
     ];
 
-    // Show menu immediately, then try to add clipboard item async
+    if (props.onFilterByValue) {
+      items.push(...buildFilterItems(columnName, cellValue, "Filter by cell value"));
+    }
+
     setCellContextMenu({ x: e.clientX, y: e.clientY, items });
 
-    readText().then((clipText) => {
-      if (clipText !== undefined && clipText !== null && clipText !== "") {
-        const clipPreview = clipText.length > 20 ? `'${clipText.slice(0, 20)}...'` : `'${clipText}'`;
-        setCellContextMenu((prev) => prev ? {
-          ...prev,
-          items: [
-            ...prev.items,
-            {
-              label: `Filter '${colDisplay}' = ${clipPreview}`,
-              action: () => props.onFilterByValue!(columnName, clipText),
-            },
-          ],
-        } : null);
-      }
-    }).catch((err) => {
-      setCellContextMenu((prev) => prev ? {
-        ...prev,
-        items: [
-          ...prev.items,
-          {
-            label: `Clipboard unavailable: ${String(err).slice(0, 30)}`,
-            action: () => {},
-          },
-        ],
-      } : null);
-    });
+    if (props.onFilterByValue) {
+      readText().then((clipText) => {
+        if (clipText !== undefined && clipText !== null && clipText !== "") {
+          setCellContextMenu((prev) => prev ? {
+            ...prev,
+            items: [
+              ...prev.items,
+              ...buildFilterItems(columnName, clipText, "Filter by clipboard value"),
+            ],
+          } : null);
+        }
+      }).catch(() => {});
+    }
   };
 
   return (
