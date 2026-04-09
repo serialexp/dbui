@@ -232,6 +232,9 @@ pub async fn list_columns(
         SELECT
             c.column_name,
             c.data_type,
+            c.character_maximum_length,
+            c.numeric_precision,
+            c.numeric_scale,
             c.is_nullable,
             c.column_default,
             CASE WHEN pk.column_name IS NOT NULL THEN true ELSE false END as is_primary_key
@@ -258,12 +261,31 @@ pub async fn list_columns(
 
     Ok(rows
         .iter()
-        .map(|r| ColumnInfo {
-            name: r.get("column_name"),
-            data_type: r.get("data_type"),
-            is_nullable: r.get::<String, _>("is_nullable") == "YES",
-            column_default: r.get("column_default"),
-            is_primary_key: r.get("is_primary_key"),
+        .map(|r| {
+            let base_type: String = r.get("data_type");
+            let char_max_len: Option<i32> = r.get("character_maximum_length");
+            let num_precision: Option<i32> = r.get("numeric_precision");
+            let num_scale: Option<i32> = r.get("numeric_scale");
+
+            let data_type = if let Some(len) = char_max_len {
+                format!("{}({})", base_type, len)
+            } else if base_type == "numeric" || base_type == "decimal" {
+                match (num_precision, num_scale) {
+                    (Some(p), Some(s)) if s > 0 => format!("{}({},{})", base_type, p, s),
+                    (Some(p), _) => format!("{}({})", base_type, p),
+                    _ => base_type,
+                }
+            } else {
+                base_type
+            };
+
+            ColumnInfo {
+                name: r.get("column_name"),
+                data_type,
+                is_nullable: r.get::<String, _>("is_nullable") == "YES",
+                column_default: r.get("column_default"),
+                is_primary_key: r.get("is_primary_key"),
+            }
         })
         .collect())
 }
@@ -330,6 +352,49 @@ pub async fn create_schema(pool: &sqlx::PgPool, name: &str) -> Result<(), String
         .await
         .map_err(|e| format!("Failed to create schema: {}", e))?;
     Ok(())
+}
+
+pub async fn get_view_dependencies(
+    pool: &sqlx::PgPool,
+    _database: &str,
+    schema: &str,
+) -> Result<Vec<super::ViewDependency>, String> {
+    let rows = sqlx::query(
+        r#"
+        SELECT DISTINCT
+            dependent_view.relname AS view_name,
+            source_table.relname AS depends_on,
+            CASE source_table.relkind
+                WHEN 'r' THEN 'table'
+                WHEN 'v' THEN 'view'
+                WHEN 'm' THEN 'materialized_view'
+            END AS depends_on_type
+        FROM pg_depend
+        JOIN pg_rewrite ON pg_depend.objid = pg_rewrite.oid
+        JOIN pg_class AS dependent_view ON pg_rewrite.ev_class = dependent_view.oid
+        JOIN pg_class AS source_table ON pg_depend.refobjid = source_table.oid
+        JOIN pg_namespace AS dependent_ns ON dependent_view.relnamespace = dependent_ns.oid
+        JOIN pg_namespace AS source_ns ON source_table.relnamespace = source_ns.oid
+        WHERE dependent_ns.nspname = $1
+          AND source_ns.nspname = $1
+          AND source_table.relname != dependent_view.relname
+          AND source_table.relkind IN ('r', 'v', 'm')
+        ORDER BY view_name, depends_on
+        "#,
+    )
+    .bind(schema)
+    .fetch_all(pool)
+    .await
+    .map_err(|e| format!("Failed to get view dependencies: {}", e))?;
+
+    Ok(rows
+        .iter()
+        .map(|r| super::ViewDependency {
+            view_name: r.get("view_name"),
+            depends_on: r.get("depends_on"),
+            depends_on_type: r.get("depends_on_type"),
+        })
+        .collect())
 }
 
 pub async fn list_constraints(

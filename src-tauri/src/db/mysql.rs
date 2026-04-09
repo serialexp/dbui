@@ -218,12 +218,12 @@ pub async fn list_columns(
     _schema: &str,
     table: &str,
 ) -> Result<Vec<ColumnInfo>, String> {
-    // SELECT column_name(0), data_type(1), is_nullable(2), column_default(3), column_key(4)
+    // SELECT column_name(0), column_type(1), is_nullable(2), column_default(3), column_key(4)
     let rows = sqlx::query(
         r#"
         SELECT
             column_name,
-            data_type,
+            column_type,
             is_nullable,
             column_default,
             column_key
