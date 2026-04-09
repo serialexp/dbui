@@ -416,6 +416,52 @@ impl ConnectionManager {
         }
     }
 
+    pub async fn cancel_queries(&self, connection_id: &str) -> Result<u64, String> {
+        let pool = self.get_pool(connection_id).await?;
+        match pool.as_ref() {
+            ConnectionPool::Postgres(p) => {
+                // Cancel all active queries from this application's connections
+                let row = sqlx::query(
+                    "SELECT count(*) as cnt FROM (
+                        SELECT pg_cancel_backend(pid)
+                        FROM pg_stat_activity
+                        WHERE pid != pg_backend_pid()
+                          AND leader_pid IS NULL
+                          AND state = 'active'
+                          AND query NOT LIKE '%pg_cancel_backend%'
+                    ) t"
+                )
+                .fetch_one(p)
+                .await
+                .map_err(|e| format!("Failed to cancel queries: {}", e))?;
+                let count: i64 = sqlx::Row::get(&row, "cnt");
+                Ok(count as u64)
+            }
+            ConnectionPool::Mysql(p) => {
+                // Kill active queries from this connection's user
+                let rows = sqlx::query(
+                    "SELECT id FROM information_schema.processlist WHERE id != CONNECTION_ID() AND command != 'Sleep'"
+                )
+                .fetch_all(p)
+                .await
+                .map_err(|e| format!("Failed to list queries: {}", e))?;
+                let mut killed = 0u64;
+                for row in &rows {
+                    let id: u64 = sqlx::Row::get(row, "id");
+                    if sqlx::query(&format!("KILL QUERY {}", id))
+                        .execute(p)
+                        .await
+                        .is_ok()
+                    {
+                        killed += 1;
+                    }
+                }
+                Ok(killed)
+            }
+            _ => Ok(0),
+        }
+    }
+
     pub async fn list_columns(
         &self,
         connection_id: &str,
@@ -519,8 +565,10 @@ fn returns_rows(query: &str) -> bool {
 }
 
 async fn execute_query_pg(pool: &sqlx::PgPool, query: &str) -> Result<QueryResult, String> {
+    // Use raw_sql to avoid prepared statements — the PREPARE + DESCRIBE
+    // round-trip can hang on system catalogs and connection poolers.
     if !returns_rows(query) {
-        let result = sqlx::query(query)
+        let result = sqlx::raw_sql(query)
             .execute(pool)
             .await
             .map_err(|e| format!("Query failed: {}", e))?;
@@ -535,7 +583,7 @@ async fn execute_query_pg(pool: &sqlx::PgPool, query: &str) -> Result<QueryResul
         });
     }
 
-    let rows = sqlx::query(query)
+    let rows = sqlx::raw_sql(query)
         .fetch_all(pool)
         .await
         .map_err(|e| format!("Query failed: {}", e))?;
@@ -623,10 +671,9 @@ fn pg_value_to_json(
         "JSON" | "JSONB" => row
             .try_get::<serde_json::Value, _>(index)
             .map(|v| v),
-        _ => row
-            .try_get::<String, _>(index)
-            .map(serde_json::Value::String),
+        _ => pg_try_decode_unknown(row, index, type_name),
     }
+    .or_else(|_| pg_try_decode_unknown(row, index, type_name))
     .unwrap_or_else(|_| {
         // Non-null value we couldn't decode — try raw bytes, then show type name
         row.try_get::<Vec<u8>, _>(index)
@@ -634,6 +681,52 @@ fn pg_value_to_json(
             .unwrap_or_else(|_| {
                 serde_json::Value::String(format!("<unsupported type: {}>", type_name))
             })
+    })
+}
+
+/// Brute-force decode for columns where the typed match arm failed.
+/// Uses raw value access to bypass sqlx's type checking, then decodes
+/// based on the PostgreSQL wire format (OID).
+fn pg_try_decode_unknown(
+    row: &sqlx::postgres::PgRow,
+    index: usize,
+    type_name: &str,
+) -> Result<serde_json::Value, sqlx::Error> {
+    use sqlx::{Row, ValueRef, TypeInfo};
+    use sqlx::postgres::PgValueRef;
+
+    let raw: PgValueRef<'_> = row.try_get_raw(index)?;
+    let oid_type = raw.type_info();
+    let oid_name = oid_type.name();
+
+    // Try decoding based on the actual OID-resolved type name
+    // This handles cases where the match arm's type name is correct but
+    // sqlx's type validation rejected the decode anyway.
+    let result = match oid_name {
+        "BOOL" | "bool" => row.try_get::<bool, _>(index).map(serde_json::Value::Bool),
+        "INT2" | "int2" => row.try_get::<i16, _>(index).map(|v| serde_json::Value::Number(v.into())),
+        "INT4" | "int4" | "OID" | "oid" => row.try_get::<i32, _>(index).map(|v| serde_json::Value::Number(v.into())),
+        "INT8" | "int8" => row.try_get::<i64, _>(index).map(|v| serde_json::Value::Number(v.into())),
+        "FLOAT4" | "float4" | "FLOAT8" | "float8" => row.try_get::<f64, _>(index).map(|v| {
+            serde_json::Number::from_f64(v)
+                .map(serde_json::Value::Number)
+                .unwrap_or(serde_json::Value::String(v.to_string()))
+        }),
+        "TIMESTAMPTZ" | "timestamptz" => row.try_get::<chrono::DateTime<chrono::Utc>, _>(index).map(|v| serde_json::Value::String(v.to_rfc3339())),
+        "TIMESTAMP" | "timestamp" => row.try_get::<chrono::NaiveDateTime, _>(index).map(|v| serde_json::Value::String(v.to_string())),
+        "DATE" | "date" => row.try_get::<chrono::NaiveDate, _>(index).map(|v| serde_json::Value::String(v.to_string())),
+        "TIME" | "time" | "TIMETZ" | "timetz" => row.try_get::<chrono::NaiveTime, _>(index).map(|v| serde_json::Value::String(v.to_string())),
+        "UUID" | "uuid" => row.try_get::<uuid::Uuid, _>(index).map(|v| serde_json::Value::String(v.to_string())),
+        "JSON" | "json" | "JSONB" | "jsonb" => row.try_get::<serde_json::Value, _>(index),
+        _ => row.try_get::<String, _>(index).map(serde_json::Value::String),
+    };
+
+    // If typed decode failed, try reading raw bytes as a UTF-8 string.
+    // This bypasses sqlx's type validation (which rejects String for non-text types).
+    result.or_else(|_| {
+        let raw: PgValueRef<'_> = row.try_get_raw(index)?;
+        let bytes = raw.as_bytes().map_err(|e| sqlx::Error::Protocol(e.to_string()))?;
+        Ok(serde_json::Value::String(String::from_utf8_lossy(bytes).into_owned()))
     })
 }
 
