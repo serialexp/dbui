@@ -1,7 +1,7 @@
 // ABOUTME: Displays the full value of a selected cell from the results table.
 // ABOUTME: Supports toggling between raw and formatted (pretty-printed) views.
 
-import { createSignal, Show } from "solid-js";
+import { createSignal, Show, createMemo } from "solid-js";
 import type { CellSelection } from "../lib/types";
 import { Icon } from "./Icon";
 import xSvg from "@phosphor-icons/core/assets/regular/x.svg?raw";
@@ -57,6 +57,20 @@ function formatValue(value: unknown, mode: ViewMode): string {
   return String(value);
 }
 
+function highlightJson(json: string): string {
+  return json.replace(
+    /("(?:[^"\\]|\\.)*")\s*:|("(?:[^"\\]|\\.)*")|(true|false)|(null)|(-?\d+(?:\.\d+)?(?:[eE][+-]?\d+)?)/g,
+    (match, key, str, bool, nil, num) => {
+      if (key) return `<span class="json-key">${key}</span>:`;
+      if (str) return `<span class="json-string">${str}</span>`;
+      if (bool) return `<span class="json-bool">${bool}</span>`;
+      if (nil) return `<span class="json-null">${nil}</span>`;
+      if (num) return `<span class="json-number">${num}</span>`;
+      return match;
+    }
+  );
+}
+
 export function CellInspector(props: Props) {
   const [viewMode, setViewMode] = createSignal<ViewMode>("raw");
   const [copied, setCopied] = createSignal(false);
@@ -65,6 +79,16 @@ export function CellInspector(props: Props) {
     if (!props.selection) return "";
     return formatValue(props.selection.value, viewMode());
   };
+
+  const isJsonFormatted = createMemo(() => {
+    if (!props.selection || viewMode() !== "formatted") return false;
+    return detectValueType(props.selection.value) === "json";
+  });
+
+  const highlightedHtml = createMemo(() => {
+    if (!isJsonFormatted()) return "";
+    return highlightJson(formattedValue());
+  });
 
   const isNull = () =>
     props.selection?.value === null || props.selection?.value === undefined;
@@ -120,12 +144,19 @@ export function CellInspector(props: Props) {
             Formatted
           </button>
         </div>
-        <div
-          class="inspector-content"
-          classList={{ null: isNull() }}
+        <Show
+          when={isJsonFormatted()}
+          fallback={
+            <div class="inspector-content" classList={{ null: isNull() }}>
+              {formattedValue()}
+            </div>
+          }
         >
-          {formattedValue()}
-        </div>
+          <div
+            class="inspector-content"
+            innerHTML={highlightedHtml()}
+          />
+        </Show>
       </div>
     </Show>
   );
