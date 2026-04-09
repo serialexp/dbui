@@ -10,6 +10,11 @@ export interface Category {
   color: string;
 }
 
+export interface LastSelected {
+  database: string;
+  schema: string;
+}
+
 export interface ConnectionConfig {
   id: string;
   name: string;
@@ -22,6 +27,7 @@ export interface ConnectionConfig {
   category_id: string | null;
   visible_databases: number | null;
   ssl_mode: SslMode;
+  last_selected: LastSelected[] | null;
 }
 
 export interface SaveConnectionInput {
@@ -90,6 +96,12 @@ export interface FunctionInfo {
   definition: string;
   return_type: string | null;
   language: string | null;
+}
+
+export interface ViewDependency {
+  view_name: string;
+  depends_on: string;
+  depends_on_type: "table" | "view" | "materialized_view";
 }
 
 export interface QueryResult {

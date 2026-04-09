@@ -33,6 +33,12 @@ impl Category {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct LastSelected {
+    pub database: String,
+    pub schema: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ConnectionConfig {
     pub id: String,
     pub name: String,
@@ -48,6 +54,8 @@ pub struct ConnectionConfig {
     pub visible_databases: Option<u16>,
     #[serde(default = "default_ssl_mode")]
     pub ssl_mode: SslMode,
+    #[serde(default)]
+    pub last_selected: Option<Vec<LastSelected>>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
@@ -86,6 +94,7 @@ impl ConnectionConfig {
             category_id,
             visible_databases: None,
             ssl_mode: SslMode::default(),
+            last_selected: None,
         }
     }
 }

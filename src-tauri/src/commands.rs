@@ -6,7 +6,7 @@ use crate::cloud::{
     KubeSecretKey, ParsedConnection,
 };
 use crate::sql_analyzer;
-use crate::db::{ColumnInfo, ConnectionManager, ConstraintInfo, FunctionInfo, IndexInfo, QueryResult};
+use crate::db::{ColumnInfo, ConnectionManager, ConstraintInfo, FunctionInfo, IndexInfo, QueryResult, ViewDependency};
 use crate::history::{HistoryManager, QueryHistoryEntry, QueryHistoryFilter};
 use crate::storage::{self, Category, ConnectionConfig, DatabaseType, SslMode};
 use std::sync::OnceLock;
@@ -131,6 +131,8 @@ pub fn update_connection(
         .path()
         .app_config_dir()
         .map_err(|e| format!("Failed to get config directory: {}", e))?;
+    // Preserve last_selected from the existing config
+    let existing = storage::get_connection(&config_dir, &input.id);
     let config = ConnectionConfig {
         id: input.id,
         name: input.name,
@@ -143,8 +145,26 @@ pub fn update_connection(
         category_id: input.category_id,
         visible_databases: input.visible_databases,
         ssl_mode: input.ssl_mode,
+        last_selected: existing.and_then(|c| c.last_selected),
     };
     storage::update_connection(&config_dir, config)
+}
+
+#[tauri::command]
+pub fn save_last_selected(
+    app: tauri::AppHandle,
+    connection_id: String,
+    selections: Vec<storage::LastSelected>,
+) -> Result<(), String> {
+    let config_dir = app
+        .path()
+        .app_config_dir()
+        .map_err(|e| format!("Failed to get config directory: {}", e))?;
+    let mut config = storage::get_connection(&config_dir, &connection_id)
+        .ok_or_else(|| format!("Connection '{}' not found", connection_id))?;
+    config.last_selected = Some(selections);
+    storage::update_connection(&config_dir, config)?;
+    Ok(())
 }
 
 #[tauri::command]
@@ -280,6 +300,17 @@ pub async fn get_function_definition(
 ) -> Result<FunctionInfo, String> {
     get_manager()
         .get_function_definition(&connection_id, &database, &schema, &function_name)
+        .await
+}
+
+#[tauri::command]
+pub async fn get_view_dependencies(
+    connection_id: String,
+    database: String,
+    schema: String,
+) -> Result<Vec<ViewDependency>, String> {
+    get_manager()
+        .get_view_dependencies(&connection_id, &database, &schema)
         .await
 }
 

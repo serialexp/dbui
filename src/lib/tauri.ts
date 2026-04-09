@@ -13,6 +13,7 @@ import type {
   IndexInfo,
   ConstraintInfo,
   FunctionInfo,
+  ViewDependency,
   QueryResult,
   QueryHistoryEntry,
   QueryHistoryFilter,
@@ -24,6 +25,7 @@ import type {
   KubeSecret,
   KubeSecretKey,
   ParsedConnection,
+  LastSelected,
 } from "./types";
 
 export async function saveConnection(
@@ -51,6 +53,13 @@ export async function updateConnection(
   input: UpdateConnectionInput
 ): Promise<ConnectionConfig> {
   return invoke("update_connection", { input });
+}
+
+export async function saveLastSelected(
+  connectionId: string,
+  selections: LastSelected[]
+): Promise<void> {
+  return invoke("save_last_selected", { connectionId, selections });
 }
 
 export async function connect(id: string): Promise<string> {
@@ -153,6 +162,14 @@ export async function getFunctionDefinition(
   functionName: string
 ): Promise<FunctionInfo> {
   return invoke("get_function_definition", { connectionId, database, schema, functionName });
+}
+
+export async function getViewDependencies(
+  connectionId: string,
+  database: string,
+  schema: string
+): Promise<ViewDependency[]> {
+  return invoke("get_view_dependencies", { connectionId, database, schema });
 }
 
 export async function getViewDefinition(

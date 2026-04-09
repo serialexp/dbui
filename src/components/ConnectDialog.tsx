@@ -11,6 +11,7 @@ import {
   listDatabases,
   listSchemas,
   switchDatabase,
+  saveLastSelected,
 } from "../lib/tauri";
 
 import xSvg from "@phosphor-icons/core/assets/regular/x.svg?raw";
@@ -80,6 +81,10 @@ export function ConnectDialog(props: Props) {
     return `${connectionId}:${database}:${schema}`;
   };
 
+  const getLastSelected = (conn: ConnectionConfig): { database: string; schema: string }[] => {
+    return conn.last_selected ?? [];
+  };
+
   const handlePickConnection = async (conn: ConnectionConfig) => {
     setSelectedConnection(conn);
     setLoading(true);
@@ -141,15 +146,67 @@ export function ConnectDialog(props: Props) {
         }
       }
 
-      setEntries(discovered);
-      // For Postgres, don't auto-select — let the user pick which database to explore.
-      // For other types, select the first database.
-      if (conn.db_type !== "postgres") {
-        setSelectedDatabase(discovered.length > 0 ? discovered[0].database : null);
+      const lastSelected = getLastSelected(conn);
+
+      if (conn.db_type === "postgres" && lastSelected.length > 0) {
+        // For Postgres, auto-fetch schemas for databases that had previous selections
+        setEntries(discovered);
+        setStep("select");
+
+        const dbsToFetch = [...new Set(lastSelected.map((s) => s.database))]
+          .filter((db) => discovered.some((e) => e.database === db));
+
+        // Select the first previously-used database in the left column
+        if (dbsToFetch.length > 0) {
+          setSelectedDatabase(dbsToFetch[0]);
+        } else {
+          setSelectedDatabase(null);
+        }
+
+        // Fetch schemas for all previously-used databases, then pre-check
+        for (const db of dbsToFetch) {
+          try {
+            await switchDatabase(conn.id, db);
+            const schemas = await listSchemas(conn.id, db);
+            setEntries((prev) => {
+              const without = prev.filter((e) => e.database !== db || e.schema !== "");
+              const newEntries: DiscoveredEntry[] = schemas.map((schema) => {
+                const id = makeContextId(conn.id, db, schema);
+                const alreadyExists = props.existingContexts.some((c) => c.id === id);
+                const wasSelected = lastSelected.some((s) => s.database === db && s.schema === schema);
+                return {
+                  database: db,
+                  schema,
+                  checked: wasSelected && !alreadyExists,
+                  alreadyExists,
+                };
+              });
+              return [...without, ...newEntries];
+            });
+            setSchemasFetched((prev) => [...prev, db]);
+          } catch {
+            setEntries((prev) => prev.filter((e) => e.database !== db));
+          }
+        }
       } else {
-        setSelectedDatabase(null);
+        // Non-Postgres or no previous selections: mark previously selected entries
+        if (lastSelected.length > 0) {
+          for (const entry of discovered) {
+            if (!entry.alreadyExists) {
+              entry.checked = lastSelected.some(
+                (s) => s.database === entry.database && s.schema === entry.schema
+              );
+            }
+          }
+        }
+        setEntries(discovered);
+        if (conn.db_type !== "postgres") {
+          setSelectedDatabase(discovered.length > 0 ? discovered[0].database : null);
+        } else {
+          setSelectedDatabase(null);
+        }
+        setStep("select");
       }
-      setStep("select");
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
     } finally {
@@ -217,6 +274,15 @@ export function ConnectDialog(props: Props) {
       categoryId: conn.category_id,
       categoryColor: category?.color || null,
     }));
+
+    // Remember selections for next time (include already-connected ones)
+    const allActive = [
+      ...selected.map((e) => ({ database: e.database, schema: e.schema })),
+      ...props.existingContexts
+        .filter((c) => c.connectionId === conn.id)
+        .map((c) => ({ database: c.database, schema: c.schema })),
+    ];
+    saveLastSelected(conn.id, allActive).catch(() => {});
 
     props.onContextsAdded(contexts);
     props.onClose();
@@ -413,7 +479,32 @@ export function ConnectDialog(props: Props) {
 
                 {/* Right column: schemas for selected database */}
                 <div class="connect-dialog-picker-col">
-                  <div class="connect-dialog-picker-label">Schemas</div>
+                  <div class="connect-dialog-picker-label">
+                    Schemas
+                    <Show when={selectedDatabase() && schemasForSelected().some(({ entry }) => !entry.alreadyExists)}>
+                      <button
+                        class="connect-dialog-select-all"
+                        onClick={() => {
+                          const items = schemasForSelected();
+                          const allCheckable = items.filter(({ entry }) => !entry.alreadyExists);
+                          const allChecked = allCheckable.every(({ entry }) => entry.checked);
+                          setEntries((prev) =>
+                            prev.map((e, i) => {
+                              const match = items.find(({ index }) => index === i);
+                              if (match && !e.alreadyExists) {
+                                return { ...e, checked: !allChecked };
+                              }
+                              return e;
+                            })
+                          );
+                        }}
+                      >
+                        {schemasForSelected().filter(({ entry }) => !entry.alreadyExists).every(({ entry }) => entry.checked)
+                          ? "Deselect all"
+                          : "Select all"}
+                      </button>
+                    </Show>
+                  </div>
                   <div class="connect-dialog-picker-list">
                     <Show when={selectedDatabase()} fallback={
                       <div class="connect-dialog-empty">Select a database</div>
