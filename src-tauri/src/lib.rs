@@ -28,6 +28,7 @@ pub fn run() {
             set_visible_databases,
             update_connection,
             save_last_selected,
+            cancel_queries,
             connect,
             disconnect,
             switch_database,

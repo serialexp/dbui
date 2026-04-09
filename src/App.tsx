@@ -15,6 +15,7 @@ import {
   listColumns,
   listIndexes,
   listConstraints,
+  cancelQueries,
 } from "./lib/tauri";
 import {
   generateDeleteQuery,
@@ -166,7 +167,7 @@ ORDER BY query_start DESC;`
 
     const newTab = activeTab();
     if (newTab) {
-      await handleExecute(query);
+      await handleExecute(query, true);
     }
   };
 
@@ -201,7 +202,7 @@ ORDER BY user;`;
 
     const newTab = activeTab();
     if (newTab) {
-      await handleExecute(query);
+      await handleExecute(query, true);
     }
   };
 
@@ -597,6 +598,20 @@ ORDER BY user;`;
     }
   };
 
+  const handleCancelQuery = async () => {
+    const tab = activeTab();
+    if (!tab?.connectionId) return;
+
+    // Attempt to cancel on the backend
+    cancelQueries(tab.connectionId).catch(console.error);
+
+    // Always reset the UI so it's no longer stuck
+    updateActiveTab({
+      loading: false,
+      error: "Query cancelled.",
+    });
+  };
+
   const getWhereColumns = (
     rows: unknown[][],
     columns: string[],
@@ -913,6 +928,7 @@ ORDER BY user;`;
                   onGenerateUpdate={handleGenerateUpdate}
                   onGenerateKill={isProcessListTab() ? handleGenerateKill : undefined}
                   onFilterByValue={handleFilterByValue}
+                  onCancel={handleCancelQuery}
                   onPendingChangesChange={(p) =>
                     updateActiveTab({ hasPendingChanges: p })
                   }

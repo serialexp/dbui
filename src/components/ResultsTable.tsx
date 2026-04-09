@@ -29,6 +29,7 @@ interface Props {
   onGenerateKill?: (rowIndices: number[]) => void;
   onPendingChangesChange?: (hasPending: boolean) => void;
   onFilterByValue?: (columnName: string, value: unknown, mode: FilterMode) => void;
+  onCancel?: () => void;
   dbType?: DatabaseType | null;
 }
 
@@ -423,7 +424,14 @@ export function ResultsTable(props: Props) {
 
       <div class="results-content">
         <Show when={props.loading}>
-          <div class="loading">Running query...</div>
+          <div class="loading">
+            Running query...
+            <Show when={props.onCancel}>
+              <button class="cancel-query-btn" onClick={() => props.onCancel!()}>
+                Cancel
+              </button>
+            </Show>
+          </div>
         </Show>
 
         <Show when={props.error}>

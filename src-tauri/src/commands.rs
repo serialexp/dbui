@@ -371,6 +371,11 @@ pub async fn execute_query(connection_id: String, query: String, database: Optio
 }
 
 #[tauri::command]
+pub async fn cancel_queries(connection_id: String) -> Result<u64, String> {
+    get_manager().cancel_queries(&connection_id).await
+}
+
+#[tauri::command]
 pub async fn save_query_history(
     app: tauri::AppHandle,
     entry: QueryHistoryEntry,

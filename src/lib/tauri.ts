@@ -62,6 +62,10 @@ export async function saveLastSelected(
   return invoke("save_last_selected", { connectionId, selections });
 }
 
+export async function cancelQueries(connectionId: string): Promise<number> {
+  return invoke("cancel_queries", { connectionId });
+}
+
 export async function connect(id: string): Promise<string> {
   return invoke("connect", { id });
 }
