@@ -8,7 +8,7 @@ use crate::cloud::{
 use crate::sql_analyzer;
 use crate::db::{ColumnInfo, ConnectionManager, ConstraintInfo, FunctionInfo, IndexInfo, QueryResult, ViewDependency};
 use crate::history::{HistoryManager, QueryHistoryEntry, QueryHistoryFilter};
-use crate::storage::{self, Category, ConnectionConfig, DatabaseType, SslMode};
+use crate::storage::{self, Category, ConnectionConfig, DatabaseType, SshTunnelConfig, SslMode};
 use std::sync::OnceLock;
 use tauri::Manager;
 use tokio::sync::OnceCell;
@@ -46,6 +46,8 @@ pub struct SaveConnectionInput {
     pub visible_databases: Option<u16>,
     #[serde(default)]
     pub ssl_mode: SslMode,
+    #[serde(default)]
+    pub ssh_tunnel: Option<SshTunnelConfig>,
 }
 
 #[derive(serde::Deserialize)]
@@ -62,6 +64,8 @@ pub struct UpdateConnectionInput {
     pub visible_databases: Option<u16>,
     #[serde(default)]
     pub ssl_mode: SslMode,
+    #[serde(default)]
+    pub ssh_tunnel: Option<SshTunnelConfig>,
 }
 
 #[tauri::command]
@@ -85,6 +89,7 @@ pub fn save_connection(
     );
     config.visible_databases = input.visible_databases;
     config.ssl_mode = input.ssl_mode;
+    config.ssh_tunnel = input.ssh_tunnel;
     storage::add_connection(&config_dir, config)
 }
 
@@ -146,6 +151,7 @@ pub fn update_connection(
         visible_databases: input.visible_databases,
         ssl_mode: input.ssl_mode,
         last_selected: existing.and_then(|c| c.last_selected),
+        ssh_tunnel: input.ssh_tunnel,
     };
     storage::update_connection(&config_dir, config)
 }
@@ -363,9 +369,17 @@ pub async fn list_constraints(
 }
 
 #[tauri::command]
-pub async fn execute_query(connection_id: String, query: String, database: Option<String>) -> Result<(QueryResult, u64), String> {
+pub async fn execute_query(
+    app: tauri::AppHandle,
+    query_id: String,
+    connection_id: String,
+    query: String,
+    database: Option<String>,
+) -> Result<(QueryResult, u64), String> {
     let start = std::time::Instant::now();
-    let result = get_manager().execute_query(&connection_id, &query, database.as_deref()).await?;
+    let result = get_manager()
+        .execute_query(&app, &query_id, &connection_id, &query, database.as_deref())
+        .await?;
     let elapsed_ms = start.elapsed().as_millis() as u64;
     Ok((result, elapsed_ms))
 }

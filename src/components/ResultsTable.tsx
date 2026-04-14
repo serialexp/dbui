@@ -2,7 +2,7 @@
 // ABOUTME: Shows columns, rows, and row count from executed queries.
 
 import { createSignal, createEffect, onCleanup, For, Show } from "solid-js";
-import type { QueryResult, CellSelection, TableContext, DatabaseType } from "../lib/types";
+import type { QueryResult, QueryProgress, CellSelection, TableContext, DatabaseType } from "../lib/types";
 import type { RowEdit } from "../lib/updateQueryGenerator";
 import { exportAsJson, exportAsSqlInsert } from "../lib/resultExporter";
 import { readText } from "@tauri-apps/plugin-clipboard-manager";
@@ -19,6 +19,7 @@ interface Props {
   result: QueryResult | null;
   error: string | null;
   loading: boolean;
+  progress?: QueryProgress | null;
   selectedCell: CellSelection | null;
   onCellSelect: (selection: CellSelection | null) => void;
   onRowDoubleClick?: (row: unknown[], columns: string[]) => void;
@@ -34,6 +35,13 @@ interface Props {
 }
 
 type ExportFormat = "json" | "sql";
+
+function formatBytes(n: number): string {
+  if (n < 1024) return `${n} B`;
+  if (n < 1024 * 1024) return `${(n / 1024).toFixed(1)} KB`;
+  if (n < 1024 * 1024 * 1024) return `${(n / (1024 * 1024)).toFixed(2)} MB`;
+  return `${(n / (1024 * 1024 * 1024)).toFixed(2)} GB`;
+}
 
 export function ResultsTable(props: Props) {
   const MAX_DISPLAY_ROWS = 1000;
@@ -376,6 +384,21 @@ export function ResultsTable(props: Props) {
                 <Show when={isLimited()}>
                   {" "}(showing first {MAX_DISPLAY_ROWS})
                 </Show>
+                <Show
+                  when={
+                    props.result!.server_time_ms != null ||
+                    props.result!.transfer_time_ms != null
+                  }
+                >
+                  {" · server "}
+                  {((props.result!.server_time_ms ?? 0) / 1000).toFixed(2)}s
+                  {" · transfer "}
+                  {((props.result!.transfer_time_ms ?? 0) / 1000).toFixed(2)}s
+                </Show>
+                <Show when={props.result!.bytes_transferred != null}>
+                  {" · "}
+                  {formatBytes(props.result!.bytes_transferred!)}
+                </Show>
               </span>
               <div class="export-dropdown" ref={exportDropdownRef}>
                 <button
@@ -425,7 +448,23 @@ export function ResultsTable(props: Props) {
       <div class="results-content">
         <Show when={props.loading}>
           <div class="loading">
-            Running query...
+            {(() => {
+              const p = props.progress;
+              if (!p || p.phase === "executing") {
+                return p && p.elapsed_ms > 0
+                  ? `Executing… (${(p.elapsed_ms / 1000).toFixed(1)}s)`
+                  : "Executing…";
+              }
+              if (p.phase === "transferring") {
+                const transferElapsed =
+                  p.server_ms != null ? p.elapsed_ms - p.server_ms : p.elapsed_ms;
+                const size = p.bytes != null ? `, ${formatBytes(p.bytes)}` : "";
+                return `Transferring: ${p.rows.toLocaleString()} rows${size} (server ${(
+                  (p.server_ms ?? 0) / 1000
+                ).toFixed(2)}s, transfer ${(transferElapsed / 1000).toFixed(1)}s)`;
+              }
+              return "Running query…";
+            })()}
             <Show when={props.onCancel}>
               <button class="cancel-query-btn" onClick={() => props.onCancel!()}>
                 Cancel

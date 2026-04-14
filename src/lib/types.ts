@@ -15,6 +15,18 @@ export interface LastSelected {
   schema: string;
 }
 
+export type SshAuthMethod =
+  | { type: "agent" }
+  | { type: "privatekey"; path: string; passphrase: string | null }
+  | { type: "password"; password: string };
+
+export interface SshTunnelConfig {
+  host: string;
+  port: number;
+  username: string;
+  auth: SshAuthMethod;
+}
+
 export interface ConnectionConfig {
   id: string;
   name: string;
@@ -28,6 +40,7 @@ export interface ConnectionConfig {
   visible_databases: number | null;
   ssl_mode: SslMode;
   last_selected: LastSelected[] | null;
+  ssh_tunnel: SshTunnelConfig | null;
 }
 
 export interface SaveConnectionInput {
@@ -41,6 +54,7 @@ export interface SaveConnectionInput {
   category_id: string | null;
   visible_databases: number | null;
   ssl_mode: SslMode;
+  ssh_tunnel: SshTunnelConfig | null;
 }
 
 export interface UpdateConnectionInput {
@@ -55,6 +69,7 @@ export interface UpdateConnectionInput {
   category_id: string | null;
   visible_databases: number | null;
   ssl_mode: SslMode;
+  ssh_tunnel: SshTunnelConfig | null;
 }
 
 export interface SaveCategoryInput {
@@ -109,6 +124,19 @@ export interface QueryResult {
   rows: unknown[][];
   row_count: number;
   message: string | null;
+  server_time_ms?: number | null;
+  transfer_time_ms?: number | null;
+  bytes_transferred?: number | null;
+}
+
+export interface QueryProgress {
+  query_id: string;
+  phase: "executing" | "transferring" | "done";
+  rows: number;
+  elapsed_ms: number;
+  server_ms?: number | null;
+  transfer_ms?: number | null;
+  bytes?: number | null;
 }
 
 export interface CellSelection {

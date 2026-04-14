@@ -3,7 +3,8 @@
 
 import { Show, onMount, onCleanup } from "solid-js";
 import { confirm } from "@tauri-apps/plugin-dialog";
-import type { MetadataView, WorkingContext } from "./lib/types";
+import { listen } from "@tauri-apps/api/event";
+import type { MetadataView, WorkingContext, QueryProgress } from "./lib/types";
 import {
   executeQuery,
   extractQueryTable,
@@ -35,6 +36,10 @@ import { ConnectionPath } from "./components/ConnectionPath";
 import { QueryHistory } from "./components/QueryHistory";
 import { TabBar } from "./components/TabBar";
 import "./styles/app.css";
+
+// Module-level map from query id to the tab id that launched the query, so
+// progress events emitted by the Rust backend can be routed to the correct tab.
+const queryIdToTabId = new Map<string, string>();
 
 function AppContent() {
   const {
@@ -555,10 +560,14 @@ ORDER BY user;`;
       result: null,
       selectedCell: null,
       metadataView: null,
+      queryProgress: null,
     });
 
+    const queryId = crypto.randomUUID();
+    queryIdToTabId.set(queryId, tab.id);
+
     try {
-      const [res, backendTime] = await executeQuery(connId, queryToExecute, db);
+      const [res, backendTime] = await executeQuery(queryId, connId, queryToExecute, db);
       updateActiveTab({ result: res, loading: false });
 
       const historyId = crypto.randomUUID();
@@ -578,7 +587,7 @@ ORDER BY user;`;
       }).catch(console.error);
     } catch (err) {
       const errorMsg = err instanceof Error ? err.message : String(err);
-      updateActiveTab({ error: errorMsg, loading: false });
+      updateActiveTab({ error: errorMsg, loading: false, queryProgress: null });
 
       const historyId = crypto.randomUUID();
       pushQueryToNavHistory(historyId, queryToExecute);
@@ -595,6 +604,8 @@ ORDER BY user;`;
         success: false,
         error_message: errorMsg,
       }).catch(console.error);
+    } finally {
+      queryIdToTabId.delete(queryId);
     }
   };
 
@@ -819,6 +830,21 @@ ORDER BY user;`;
     };
     window.addEventListener("keydown", handleKeyDown);
     onCleanup(() => window.removeEventListener("keydown", handleKeyDown));
+
+    // Route backend query-progress events to the originating tab so the
+    // UI can show executing / transferring / rows-so-far in real time.
+    const unlistenPromise = listen<QueryProgress>("query-progress", (event) => {
+      const progress = event.payload;
+      const tabId = queryIdToTabId.get(progress.query_id);
+      if (!tabId) return;
+      updateTab(tabId, { queryProgress: progress });
+      if (progress.phase === "done") {
+        queryIdToTabId.delete(progress.query_id);
+      }
+    });
+    onCleanup(() => {
+      unlistenPromise.then((fn) => fn()).catch(() => {});
+    });
   });
 
   const tab = () => activeTab();
@@ -919,6 +945,7 @@ ORDER BY user;`;
                   result={tab()!.result}
                   error={tab()!.error}
                   loading={tab()!.loading}
+                  progress={tab()!.queryProgress}
                   selectedCell={tab()!.selectedCell}
                   onCellSelect={(sel) => updateActiveTab({ selectedCell: sel })}
                   onRowDoubleClick={handleRowDoubleClick}

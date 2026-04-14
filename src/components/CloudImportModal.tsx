@@ -336,6 +336,7 @@ export function CloudImportModal(props: Props) {
         category_id: categoryId(),
         visible_databases: null,
         ssl_mode: "disable",
+        ssh_tunnel: null,
       };
 
       await saveConnection(input);

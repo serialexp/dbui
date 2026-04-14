@@ -37,4 +37,6 @@ serde_yaml = "0.9"
 redis = { version = "0.27", features = ["tokio-comp", "connection-manager"] }
 tauri-plugin-clipboard-manager = "2.3.2"
 sqlparser = "0.61.0"
+russh = "0.60"
+futures = "0.3"
 

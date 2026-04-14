@@ -231,6 +231,7 @@ async fn browse_keys(conn: &mut ConnectionManager, args: &[&str]) -> Result<Quer
                 rows,
                 row_count,
                 message,
+                ..Default::default()
             })
         }
         Ok(_) => Err("Invalid SCAN response format".to_string()),
@@ -250,6 +251,7 @@ pub async fn execute_query(
             rows: vec![],
             row_count: 0,
             message: Some("Empty command".to_string()),
+            ..Default::default()
         });
     }
 
@@ -260,6 +262,7 @@ pub async fn execute_query(
             rows: vec![],
             row_count: 0,
             message: Some("Empty command".to_string()),
+            ..Default::default()
         });
     }
 
@@ -279,6 +282,7 @@ pub async fn execute_query(
                     rows: vec![],
                     row_count: 0,
                     message: Some(format!("Switched to database {}", db_index)),
+                    ..Default::default()
                 }),
                 Err(e) => Err(format!("Redis error: {}", e)),
             };
@@ -356,12 +360,14 @@ fn format_redis_value(value: &Value, cmd_name: &str) -> QueryResult {
             rows: vec![vec![serde_json::Value::Null]],
             row_count: 1,
             message: None,
+            ..Default::default()
         },
         Value::Int(i) => QueryResult {
             columns: vec!["value".to_string()],
             rows: vec![vec![serde_json::Value::Number((*i).into())]],
             row_count: 1,
             message: None,
+            ..Default::default()
         },
         Value::BulkString(bytes) => {
             let s = String::from_utf8_lossy(bytes).to_string();
@@ -370,6 +376,7 @@ fn format_redis_value(value: &Value, cmd_name: &str) -> QueryResult {
                 rows: vec![vec![serde_json::Value::String(s)]],
                 row_count: 1,
                 message: None,
+                ..Default::default()
             }
         }
         Value::Array(arr) => format_array_value(arr, cmd_name),
@@ -378,12 +385,14 @@ fn format_redis_value(value: &Value, cmd_name: &str) -> QueryResult {
             rows: vec![vec![serde_json::Value::String(s.clone())]],
             row_count: 1,
             message: None,
+            ..Default::default()
         },
         Value::Okay => QueryResult {
             columns: vec![],
             rows: vec![],
             row_count: 0,
             message: Some("OK".to_string()),
+            ..Default::default()
         },
         Value::Map(pairs) => {
             let rows: Vec<Vec<serde_json::Value>> = pairs
@@ -401,6 +410,7 @@ fn format_redis_value(value: &Value, cmd_name: &str) -> QueryResult {
                 rows,
                 row_count,
                 message: None,
+                ..Default::default()
             }
         }
         Value::Set(items) => {
@@ -414,6 +424,7 @@ fn format_redis_value(value: &Value, cmd_name: &str) -> QueryResult {
                 rows,
                 row_count,
                 message: None,
+                ..Default::default()
             }
         }
         Value::Double(d) => QueryResult {
@@ -423,24 +434,28 @@ fn format_redis_value(value: &Value, cmd_name: &str) -> QueryResult {
                 .unwrap_or(serde_json::Value::Null)]],
             row_count: 1,
             message: None,
+            ..Default::default()
         },
         Value::Boolean(b) => QueryResult {
             columns: vec!["value".to_string()],
             rows: vec![vec![serde_json::Value::Bool(*b)]],
             row_count: 1,
             message: None,
+            ..Default::default()
         },
         Value::VerbatimString { format: _, text } => QueryResult {
             columns: vec!["value".to_string()],
             rows: vec![vec![serde_json::Value::String(text.clone())]],
             row_count: 1,
             message: None,
+            ..Default::default()
         },
         Value::BigNumber(n) => QueryResult {
             columns: vec!["value".to_string()],
             rows: vec![vec![serde_json::Value::String(n.to_string())]],
             row_count: 1,
             message: None,
+            ..Default::default()
         },
         Value::Push { kind: _, data } => format_array_value(data, cmd_name),
         Value::Attribute { data, attributes: _ } => format_redis_value(data, cmd_name),
@@ -449,6 +464,7 @@ fn format_redis_value(value: &Value, cmd_name: &str) -> QueryResult {
             rows: vec![],
             row_count: 0,
             message: Some(format!("Server error: {:?}", err)),
+            ..Default::default()
         },
     }
 }
@@ -473,6 +489,7 @@ fn format_array_value(arr: &[Value], cmd_name: &str) -> QueryResult {
             rows,
             row_count,
             message: None,
+            ..Default::default()
         };
     }
 
@@ -491,6 +508,7 @@ fn format_array_value(arr: &[Value], cmd_name: &str) -> QueryResult {
             rows,
             row_count,
             message: None,
+            ..Default::default()
         };
     }
 
@@ -523,6 +541,7 @@ fn format_array_value(arr: &[Value], cmd_name: &str) -> QueryResult {
                     rows,
                     row_count,
                     message: None,
+                    ..Default::default()
                 };
             }
         }
@@ -539,6 +558,7 @@ fn format_array_value(arr: &[Value], cmd_name: &str) -> QueryResult {
                 rows,
                 row_count,
                 message: Some(format!("Cursor: {}", value_to_string(&arr[0]))),
+                ..Default::default()
             };
         }
     }
@@ -560,6 +580,7 @@ fn format_array_value(arr: &[Value], cmd_name: &str) -> QueryResult {
         rows,
         row_count,
         message: None,
+        ..Default::default()
     }
 }
 

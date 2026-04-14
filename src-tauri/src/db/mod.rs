@@ -5,8 +5,10 @@ pub mod mysql;
 pub mod postgres;
 pub mod redis_db;
 pub mod sqlite;
+pub mod ssh_tunnel;
 
 use crate::storage::{ConnectionConfig, DatabaseType, SslMode};
+use ssh_tunnel::TunnelHandle;
 use serde::{Deserialize, Serialize};
 use sqlx::Column;
 use sqlx::Row;
@@ -14,10 +16,37 @@ use sqlx::TypeInfo;
 use sqlx::pool::PoolOptions;
 use std::collections::HashMap;
 use std::sync::Arc;
-use std::time::Duration;
+use std::time::{Duration, Instant};
+use tauri::{AppHandle, Emitter};
 use tokio::sync::RwLock;
 
 const CONNECT_TIMEOUT: Duration = Duration::from_secs(10);
+const QUERY_PROGRESS_EVENT: &str = "query-progress";
+const PROGRESS_INTERVAL: Duration = Duration::from_millis(250);
+
+fn emit_progress(
+    app: &AppHandle,
+    query_id: &str,
+    phase: &'static str,
+    rows: usize,
+    elapsed_ms: u64,
+    server_ms: Option<u64>,
+    transfer_ms: Option<u64>,
+    bytes: Option<u64>,
+) {
+    let _ = app.emit(
+        QUERY_PROGRESS_EVENT,
+        QueryProgress {
+            query_id: query_id.to_string(),
+            phase,
+            rows,
+            elapsed_ms,
+            server_ms,
+            transfer_ms,
+            bytes,
+        },
+    );
+}
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ColumnInfo {
@@ -60,12 +89,36 @@ pub struct ViewDependency {
     pub depends_on_type: String,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct QueryResult {
     pub columns: Vec<String>,
     pub rows: Vec<Vec<serde_json::Value>>,
     pub row_count: usize,
     pub message: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub server_time_ms: Option<u64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub transfer_time_ms: Option<u64>,
+    /// Approximate payload size — sum of raw column bytes across all rows.
+    /// Excludes protocol framing (MySQL/Postgres packet headers, length
+    /// prefixes, column metadata) so the true wire-level number is modestly
+    /// higher, but for fat rows this dominates.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub bytes_transferred: Option<u64>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct QueryProgress {
+    pub query_id: String,
+    pub phase: &'static str, // "executing" | "transferring" | "done"
+    pub rows: usize,
+    pub elapsed_ms: u64,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub server_ms: Option<u64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub transfer_ms: Option<u64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub bytes: Option<u64>,
 }
 
 pub enum ConnectionPool {
@@ -75,8 +128,16 @@ pub enum ConnectionPool {
     Redis(redis::aio::ConnectionManager),
 }
 
+/// A connected pool plus any resources whose lifetime must match the pool
+/// (e.g., an SSH tunnel). Field order matters: the pool is dropped before the
+/// tunnel so in-flight TCP traffic can still flow during pool teardown.
+pub struct ActiveConnection {
+    pub pool: Arc<ConnectionPool>,
+    _tunnel: Option<TunnelHandle>,
+}
+
 pub struct ConnectionManager {
-    pools: RwLock<HashMap<String, Arc<ConnectionPool>>>,
+    pools: RwLock<HashMap<String, ActiveConnection>>,
 }
 
 impl ConnectionManager {
@@ -89,6 +150,30 @@ impl ConnectionManager {
     pub async fn connect(&self, config: &ConnectionConfig) -> Result<String, String> {
         let connection_id = config.id.clone();
 
+        // SQLite has no network connection so SSH tunneling does not apply.
+        // For other database types, if an SSH tunnel is configured, establish
+        // it first and route the DB connection through the local forwarded port.
+        let (effective_host, effective_port, tunnel) = if matches!(
+            config.db_type,
+            DatabaseType::Sqlite
+        ) {
+            (config.host.clone(), config.port, None)
+        } else if let Some(ssh_cfg) = &config.ssh_tunnel {
+            let handle = ssh_tunnel::establish_tunnel(
+                ssh_cfg,
+                config.host.clone(),
+                config.port,
+            )
+            .await?;
+            (
+                "127.0.0.1".to_string(),
+                handle.local_port,
+                Some(handle),
+            )
+        } else {
+            (config.host.clone(), config.port, None)
+        };
+
         let pool = match config.db_type {
             DatabaseType::Postgres => {
                 let ssl_param = match config.ssl_mode {
@@ -100,8 +185,8 @@ impl ConnectionManager {
                     "postgres://{}:{}@{}:{}/{}?{}",
                     config.username,
                     config.password,
-                    config.host,
-                    config.port,
+                    effective_host,
+                    effective_port,
                     config.database.as_deref().unwrap_or("postgres"),
                     ssl_param,
                 );
@@ -122,8 +207,8 @@ impl ConnectionManager {
                     "mysql://{}:{}@{}:{}/{}?{}",
                     config.username,
                     config.password,
-                    config.host,
-                    config.port,
+                    effective_host,
+                    effective_port,
                     config.database.as_deref().unwrap_or("mysql"),
                     ssl_param,
                 );
@@ -146,8 +231,8 @@ impl ConnectionManager {
             }
             DatabaseType::Redis => {
                 let manager = redis_db::connect(
-                    &config.host,
-                    config.port,
+                    &effective_host,
+                    effective_port,
                     &config.username,
                     &config.password,
                 )
@@ -156,8 +241,12 @@ impl ConnectionManager {
             }
         };
 
+        let active = ActiveConnection {
+            pool: Arc::new(pool),
+            _tunnel: tunnel,
+        };
         let mut pools = self.pools.write().await;
-        pools.insert(connection_id.clone(), Arc::new(pool));
+        pools.insert(connection_id.clone(), active);
         Ok(connection_id)
     }
 
@@ -194,7 +283,7 @@ impl ConnectionManager {
         let pools = self.pools.read().await;
         pools
             .get(connection_id)
-            .cloned()
+            .map(|a| a.pool.clone())
             .ok_or_else(|| format!("Connection '{}' not found or not connected", connection_id))
     }
 
@@ -514,22 +603,41 @@ impl ConnectionManager {
 
     pub async fn execute_query(
         &self,
+        app: &AppHandle,
+        query_id: &str,
         connection_id: &str,
         query: &str,
         database: Option<&str>,
     ) -> Result<QueryResult, String> {
         let pool = self.get_pool(connection_id).await?;
         match pool.as_ref() {
-            ConnectionPool::Postgres(p) => execute_query_pg(p, query).await,
-            ConnectionPool::Mysql(p) => execute_query_mysql(p, query).await,
-            ConnectionPool::Sqlite(p) => execute_query_sqlite(p, query).await,
+            ConnectionPool::Postgres(p) => execute_query_pg(app, query_id, p, query).await,
+            ConnectionPool::Mysql(p) => execute_query_mysql(app, query_id, p, query).await,
+            ConnectionPool::Sqlite(p) => execute_query_sqlite(app, query_id, p, query).await,
             ConnectionPool::Redis(c) => {
                 let mut conn = c.clone();
-                // Ensure correct database is selected before executing query
                 if let Some(db) = database {
                     redis_db::switch_database(&mut conn, db).await?;
                 }
-                redis_db::execute_query(&mut conn, query).await
+                let start = Instant::now();
+                emit_progress(app, query_id, "executing", 0, 0, None, None, None);
+                let result = redis_db::execute_query(&mut conn, query).await?;
+                let total_ms = start.elapsed().as_millis() as u64;
+                emit_progress(
+                    app,
+                    query_id,
+                    "done",
+                    result.row_count,
+                    total_ms,
+                    Some(total_ms),
+                    Some(0),
+                    None,
+                );
+                Ok(QueryResult {
+                    server_time_ms: Some(total_ms),
+                    transfer_time_ms: Some(0),
+                    ..result
+                })
             }
         }
     }
@@ -564,7 +672,17 @@ fn returns_rows(query: &str) -> bool {
     )
 }
 
-async fn execute_query_pg(pool: &sqlx::PgPool, query: &str) -> Result<QueryResult, String> {
+async fn execute_query_pg(
+    app: &AppHandle,
+    query_id: &str,
+    pool: &sqlx::PgPool,
+    query: &str,
+) -> Result<QueryResult, String> {
+    use futures::StreamExt;
+
+    let start = Instant::now();
+    emit_progress(app, query_id, "executing", 0, 0, None, None, None);
+
     // Use raw_sql to avoid prepared statements — the PREPARE + DESCRIBE
     // round-trip can hang on system catalogs and connection poolers.
     if !returns_rows(query) {
@@ -574,43 +692,111 @@ async fn execute_query_pg(pool: &sqlx::PgPool, query: &str) -> Result<QueryResul
             .map_err(|e| format!("Query failed: {}", e))?;
 
         let rows_affected = result.rows_affected();
-
+        let total_ms = start.elapsed().as_millis() as u64;
+        emit_progress(
+            app,
+            query_id,
+            "done",
+            rows_affected as usize,
+            total_ms,
+            Some(total_ms),
+            Some(0),
+            Some(0),
+        );
         return Ok(QueryResult {
             columns: vec![],
             rows: vec![],
             row_count: rows_affected as usize,
             message: Some(format!("{} row(s) affected.", rows_affected)),
+            server_time_ms: Some(total_ms),
+            transfer_time_ms: Some(0),
+            bytes_transferred: Some(0),
         });
     }
 
-    let rows = sqlx::raw_sql(query)
-        .fetch_all(pool)
-        .await
-        .map_err(|e| format!("Query failed: {}", e))?;
+    let mut stream = sqlx::raw_sql(query).fetch(pool);
+    let mut columns: Vec<String> = Vec::new();
+    let mut result_rows: Vec<Vec<serde_json::Value>> = Vec::new();
+    let mut first_row_at: Option<Instant> = None;
+    let mut last_emit = start;
+    let mut bytes_total: u64 = 0;
 
-    if rows.is_empty() {
+    while let Some(row_res) = stream.next().await {
+        let row = row_res.map_err(|e| format!("Query failed: {}", e))?;
+        if first_row_at.is_none() {
+            let now = Instant::now();
+            first_row_at = Some(now);
+            columns = row.columns().iter().map(|c| c.name().to_string()).collect();
+            let server_ms = now.duration_since(start).as_millis() as u64;
+            emit_progress(
+                app,
+                query_id,
+                "transferring",
+                0,
+                server_ms,
+                Some(server_ms),
+                None,
+                Some(0),
+            );
+            last_emit = now;
+        }
+        let mut row_values = Vec::with_capacity(row.columns().len());
+        for (i, col) in row.columns().iter().enumerate() {
+            let v = pg_value_to_json(&row, i, col.type_info().name());
+            bytes_total += approx_value_bytes(&v) as u64;
+            row_values.push(v);
+        }
+        result_rows.push(row_values);
+
+        if last_emit.elapsed() >= PROGRESS_INTERVAL {
+            let now = Instant::now();
+            let elapsed = now.duration_since(start).as_millis() as u64;
+            let server_ms = first_row_at.map(|t| t.duration_since(start).as_millis() as u64);
+            emit_progress(
+                app,
+                query_id,
+                "transferring",
+                result_rows.len(),
+                elapsed,
+                server_ms,
+                None,
+                Some(bytes_total),
+            );
+            last_emit = now;
+        }
+    }
+
+    let end = Instant::now();
+    let total_ms = end.duration_since(start).as_millis() as u64;
+    let (server_ms, transfer_ms) = match first_row_at {
+        Some(t1) => (
+            t1.duration_since(start).as_millis() as u64,
+            end.duration_since(t1).as_millis() as u64,
+        ),
+        None => (total_ms, 0),
+    };
+
+    emit_progress(
+        app,
+        query_id,
+        "done",
+        result_rows.len(),
+        total_ms,
+        Some(server_ms),
+        Some(transfer_ms),
+        Some(bytes_total),
+    );
+
+    if result_rows.is_empty() {
         return Ok(QueryResult {
             columns: vec![],
             rows: vec![],
             row_count: 0,
             message: Some("0 row(s) affected.".to_string()),
+            server_time_ms: Some(server_ms),
+            transfer_time_ms: Some(transfer_ms),
+            bytes_transferred: Some(bytes_total),
         });
-    }
-
-    let columns: Vec<String> = rows[0]
-        .columns()
-        .iter()
-        .map(|c| c.name().to_string())
-        .collect();
-
-    let mut result_rows = Vec::new();
-    for row in &rows {
-        let mut row_values = Vec::new();
-        for (i, col) in row.columns().iter().enumerate() {
-            let value = pg_value_to_json(&row, i, col.type_info().name());
-            row_values.push(value);
-        }
-        result_rows.push(row_values);
     }
 
     Ok(QueryResult {
@@ -618,7 +804,24 @@ async fn execute_query_pg(pool: &sqlx::PgPool, query: &str) -> Result<QueryResul
         row_count: result_rows.len(),
         rows: result_rows,
         message: None,
+        server_time_ms: Some(server_ms),
+        transfer_time_ms: Some(transfer_ms),
+        bytes_transferred: Some(bytes_total),
     })
+}
+
+/// Approximate the payload size of a decoded value for progress reporting.
+/// Serialized JSON length is a reasonable proxy — strings and numbers are
+/// 1:1 with their wire form; binary blobs are inflated by base64/escape but
+/// typically dominate total size anyway, so the order of magnitude is right.
+fn approx_value_bytes(v: &serde_json::Value) -> usize {
+    match v {
+        serde_json::Value::Null => 0,
+        serde_json::Value::Bool(_) => 1,
+        serde_json::Value::Number(n) => n.to_string().len(),
+        serde_json::Value::String(s) => s.len(),
+        _ => serde_json::to_string(v).map(|s| s.len()).unwrap_or(0),
+    }
 }
 
 fn pg_value_to_json(
@@ -730,7 +933,17 @@ fn pg_try_decode_unknown(
     })
 }
 
-async fn execute_query_mysql(pool: &sqlx::MySqlPool, query: &str) -> Result<QueryResult, String> {
+async fn execute_query_mysql(
+    app: &AppHandle,
+    query_id: &str,
+    pool: &sqlx::MySqlPool,
+    query: &str,
+) -> Result<QueryResult, String> {
+    use futures::StreamExt;
+
+    let start = Instant::now();
+    emit_progress(app, query_id, "executing", 0, 0, None, None, None);
+
     // Use raw_sql to avoid prepared statements — MySQL's prepared statement
     // protocol doesn't support many statement types (SET, KILL, etc.).
     if !returns_rows(query) {
@@ -740,43 +953,111 @@ async fn execute_query_mysql(pool: &sqlx::MySqlPool, query: &str) -> Result<Quer
             .map_err(|e| format!("Query failed: {}", e))?;
 
         let rows_affected = result.rows_affected();
-
+        let total_ms = start.elapsed().as_millis() as u64;
+        emit_progress(
+            app,
+            query_id,
+            "done",
+            rows_affected as usize,
+            total_ms,
+            Some(total_ms),
+            Some(0),
+            Some(0),
+        );
         return Ok(QueryResult {
             columns: vec![],
             rows: vec![],
             row_count: rows_affected as usize,
             message: Some(format!("{} row(s) affected.", rows_affected)),
+            server_time_ms: Some(total_ms),
+            transfer_time_ms: Some(0),
+            bytes_transferred: Some(0),
         });
     }
 
-    let rows = sqlx::raw_sql(query)
-        .fetch_all(pool)
-        .await
-        .map_err(|e| format!("Query failed: {}", e))?;
+    let mut stream = sqlx::raw_sql(query).fetch(pool);
+    let mut columns: Vec<String> = Vec::new();
+    let mut result_rows: Vec<Vec<serde_json::Value>> = Vec::new();
+    let mut first_row_at: Option<Instant> = None;
+    let mut last_emit = start;
+    let mut bytes_total: u64 = 0;
 
-    if rows.is_empty() {
+    while let Some(row_res) = stream.next().await {
+        let row = row_res.map_err(|e| format!("Query failed: {}", e))?;
+        if first_row_at.is_none() {
+            let now = Instant::now();
+            first_row_at = Some(now);
+            columns = row.columns().iter().map(|c| c.name().to_string()).collect();
+            let server_ms = now.duration_since(start).as_millis() as u64;
+            emit_progress(
+                app,
+                query_id,
+                "transferring",
+                0,
+                server_ms,
+                Some(server_ms),
+                None,
+                Some(0),
+            );
+            last_emit = now;
+        }
+        let mut row_values = Vec::with_capacity(row.columns().len());
+        for (i, col) in row.columns().iter().enumerate() {
+            let v = mysql_value_to_json(&row, i, col.type_info().name());
+            bytes_total += approx_value_bytes(&v) as u64;
+            row_values.push(v);
+        }
+        result_rows.push(row_values);
+
+        if last_emit.elapsed() >= PROGRESS_INTERVAL {
+            let now = Instant::now();
+            let elapsed = now.duration_since(start).as_millis() as u64;
+            let server_ms = first_row_at.map(|t| t.duration_since(start).as_millis() as u64);
+            emit_progress(
+                app,
+                query_id,
+                "transferring",
+                result_rows.len(),
+                elapsed,
+                server_ms,
+                None,
+                Some(bytes_total),
+            );
+            last_emit = now;
+        }
+    }
+
+    let end = Instant::now();
+    let total_ms = end.duration_since(start).as_millis() as u64;
+    let (server_ms, transfer_ms) = match first_row_at {
+        Some(t1) => (
+            t1.duration_since(start).as_millis() as u64,
+            end.duration_since(t1).as_millis() as u64,
+        ),
+        None => (total_ms, 0),
+    };
+
+    emit_progress(
+        app,
+        query_id,
+        "done",
+        result_rows.len(),
+        total_ms,
+        Some(server_ms),
+        Some(transfer_ms),
+        Some(bytes_total),
+    );
+
+    if result_rows.is_empty() {
         return Ok(QueryResult {
             columns: vec![],
             rows: vec![],
             row_count: 0,
             message: Some("0 row(s) affected.".to_string()),
+            server_time_ms: Some(server_ms),
+            transfer_time_ms: Some(transfer_ms),
+            bytes_transferred: Some(bytes_total),
         });
-    }
-
-    let columns: Vec<String> = rows[0]
-        .columns()
-        .iter()
-        .map(|c| c.name().to_string())
-        .collect();
-
-    let mut result_rows = Vec::new();
-    for row in &rows {
-        let mut row_values = Vec::new();
-        for (i, col) in row.columns().iter().enumerate() {
-            let value = mysql_value_to_json(&row, i, col.type_info().name());
-            row_values.push(value);
-        }
-        result_rows.push(row_values);
     }
 
     Ok(QueryResult {
@@ -784,6 +1065,9 @@ async fn execute_query_mysql(pool: &sqlx::MySqlPool, query: &str) -> Result<Quer
         row_count: result_rows.len(),
         rows: result_rows,
         message: None,
+        server_time_ms: Some(server_ms),
+        transfer_time_ms: Some(transfer_ms),
+        bytes_transferred: Some(bytes_total),
     })
 }
 
@@ -837,7 +1121,14 @@ fn mysql_value_to_json(
     })
 }
 
-async fn execute_query_sqlite(pool: &sqlx::SqlitePool, query: &str) -> Result<QueryResult, String> {
+async fn execute_query_sqlite(
+    app: &AppHandle,
+    query_id: &str,
+    pool: &sqlx::SqlitePool,
+    query: &str,
+) -> Result<QueryResult, String> {
+    let start = Instant::now();
+    emit_progress(app, query_id, "executing", 0, 0, None, None, None);
     if !returns_rows(query) {
         let result = sqlx::query(query)
             .execute(pool)
@@ -845,12 +1136,25 @@ async fn execute_query_sqlite(pool: &sqlx::SqlitePool, query: &str) -> Result<Qu
             .map_err(|e| format!("Query failed: {}", e))?;
 
         let rows_affected = result.rows_affected();
-
+        let total_ms = start.elapsed().as_millis() as u64;
+        emit_progress(
+            app,
+            query_id,
+            "done",
+            rows_affected as usize,
+            total_ms,
+            Some(total_ms),
+            Some(0),
+            Some(0),
+        );
         return Ok(QueryResult {
             columns: vec![],
             rows: vec![],
             row_count: rows_affected as usize,
             message: Some(format!("{} row(s) affected.", rows_affected)),
+            server_time_ms: Some(total_ms),
+            transfer_time_ms: Some(0),
+            bytes_transferred: Some(0),
         });
     }
 
@@ -860,11 +1164,16 @@ async fn execute_query_sqlite(pool: &sqlx::SqlitePool, query: &str) -> Result<Qu
         .map_err(|e| format!("Query failed: {}", e))?;
 
     if rows.is_empty() {
+        let total_ms = start.elapsed().as_millis() as u64;
+        emit_progress(app, query_id, "done", 0, total_ms, Some(total_ms), Some(0), Some(0));
         return Ok(QueryResult {
             columns: vec![],
             rows: vec![],
             row_count: 0,
             message: Some("0 row(s) affected.".to_string()),
+            server_time_ms: Some(total_ms),
+            transfer_time_ms: Some(0),
+            bytes_transferred: Some(0),
         });
     }
 
@@ -884,11 +1193,25 @@ async fn execute_query_sqlite(pool: &sqlx::SqlitePool, query: &str) -> Result<Qu
         result_rows.push(row_values);
     }
 
+    let total_ms = start.elapsed().as_millis() as u64;
+    emit_progress(
+        app,
+        query_id,
+        "done",
+        result_rows.len(),
+        total_ms,
+        Some(total_ms),
+        Some(0),
+        None,
+    );
     Ok(QueryResult {
         columns,
         row_count: result_rows.len(),
         rows: result_rows,
         message: None,
+        server_time_ms: Some(total_ms),
+        transfer_time_ms: Some(0),
+        bytes_transferred: None,
     })
 }
 

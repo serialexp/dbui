@@ -39,6 +39,28 @@ pub struct LastSelected {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(tag = "type", rename_all = "lowercase")]
+pub enum SshAuthMethod {
+    Agent,
+    PrivateKey {
+        path: String,
+        #[serde(default)]
+        passphrase: Option<String>,
+    },
+    Password {
+        password: String,
+    },
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SshTunnelConfig {
+    pub host: String,
+    pub port: u16,
+    pub username: String,
+    pub auth: SshAuthMethod,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ConnectionConfig {
     pub id: String,
     pub name: String,
@@ -56,6 +78,8 @@ pub struct ConnectionConfig {
     pub ssl_mode: SslMode,
     #[serde(default)]
     pub last_selected: Option<Vec<LastSelected>>,
+    #[serde(default)]
+    pub ssh_tunnel: Option<SshTunnelConfig>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
@@ -95,6 +119,7 @@ impl ConnectionConfig {
             visible_databases: None,
             ssl_mode: SslMode::default(),
             last_selected: None,
+            ssh_tunnel: None,
         }
     }
 }

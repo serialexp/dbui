@@ -6,6 +6,7 @@ import { createStore, produce } from "solid-js/store";
 import type {
   DatabaseType,
   QueryResult,
+  QueryProgress,
   CellSelection,
   MetadataView,
   FunctionInfo,
@@ -38,6 +39,7 @@ export interface Tab {
   result: QueryResult | null;
   error: string | null;
   loading: boolean;
+  queryProgress: QueryProgress | null;
 
   // Selection
   selectedCell: CellSelection | null;
@@ -79,6 +81,7 @@ function createDefaultTab(overrides: Partial<Tab> = {}): Tab {
     result: null,
     error: null,
     loading: false,
+    queryProgress: null,
     selectedCell: null,
     selectedMetadataRows: [],
     lastClickedMetadataRow: null,

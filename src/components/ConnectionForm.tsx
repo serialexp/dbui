@@ -2,7 +2,7 @@
 // ABOUTME: Supports PostgreSQL, MySQL, and SQLite connection configuration.
 
 import { createSignal, createEffect, Show, For, onMount, onCleanup } from "solid-js";
-import type { DatabaseType, SslMode, SaveConnectionInput, UpdateConnectionInput, Category, ConnectionConfig } from "../lib/types";
+import type { DatabaseType, SslMode, SaveConnectionInput, UpdateConnectionInput, Category, ConnectionConfig, SshTunnelConfig, SshAuthMethod } from "../lib/types";
 import { saveConnection, updateConnection } from "../lib/tauri";
 
 interface Props {
@@ -25,6 +25,14 @@ export function ConnectionForm(props: Props) {
   const [connectionUrl, setConnectionUrl] = createSignal("");
   const [visibleDatabases, setVisibleDatabases] = createSignal<number>(4);
   const [sslMode, setSslMode] = createSignal<SslMode>("disable");
+  const [sshEnabled, setSshEnabled] = createSignal(false);
+  const [sshHost, setSshHost] = createSignal("");
+  const [sshPort, setSshPort] = createSignal(22);
+  const [sshUsername, setSshUsername] = createSignal("");
+  const [sshAuthType, setSshAuthType] = createSignal<SshAuthMethod["type"]>("agent");
+  const [sshKeyPath, setSshKeyPath] = createSignal("");
+  const [sshKeyPassphrase, setSshKeyPassphrase] = createSignal("");
+  const [sshPassword, setSshPassword] = createSignal("");
   const [error, setError] = createSignal<string | null>(null);
   const [saving, setSaving] = createSignal(false);
   const [updatingFromUrl, setUpdatingFromUrl] = createSignal(false);
@@ -49,6 +57,20 @@ export function ConnectionForm(props: Props) {
         setUsername(conn.username);
         setPassword(conn.password);
         setDatabase(conn.database || "");
+      }
+
+      if (conn.ssh_tunnel) {
+        setSshEnabled(true);
+        setSshHost(conn.ssh_tunnel.host);
+        setSshPort(conn.ssh_tunnel.port);
+        setSshUsername(conn.ssh_tunnel.username);
+        setSshAuthType(conn.ssh_tunnel.auth.type);
+        if (conn.ssh_tunnel.auth.type === "privatekey") {
+          setSshKeyPath(conn.ssh_tunnel.auth.path);
+          setSshKeyPassphrase(conn.ssh_tunnel.auth.passphrase ?? "");
+        } else if (conn.ssh_tunnel.auth.type === "password") {
+          setSshPassword(conn.ssh_tunnel.auth.password);
+        }
       }
     }
 
@@ -244,12 +266,35 @@ export function ConnectionForm(props: Props) {
     }
   };
 
+  const buildSshConfig = (): SshTunnelConfig | null => {
+    if (!sshEnabled() || dbType() === "sqlite") return null;
+    let auth: SshAuthMethod;
+    if (sshAuthType() === "privatekey") {
+      auth = {
+        type: "privatekey",
+        path: sshKeyPath(),
+        passphrase: sshKeyPassphrase() || null,
+      };
+    } else if (sshAuthType() === "password") {
+      auth = { type: "password", password: sshPassword() };
+    } else {
+      auth = { type: "agent" };
+    }
+    return {
+      host: sshHost(),
+      port: sshPort(),
+      username: sshUsername(),
+      auth,
+    };
+  };
+
   const handleSubmit = async (e: Event) => {
     e.preventDefault();
     setError(null);
     setSaving(true);
 
     try {
+      const ssh_tunnel = buildSshConfig();
       if (isEditing()) {
         const input: UpdateConnectionInput = {
           id: props.connection!.id,
@@ -263,6 +308,7 @@ export function ConnectionForm(props: Props) {
           category_id: categoryId(),
           visible_databases: dbType() === "redis" ? visibleDatabases() : null,
           ssl_mode: sslMode(),
+          ssh_tunnel,
         };
         await updateConnection(input);
       } else {
@@ -277,6 +323,7 @@ export function ConnectionForm(props: Props) {
           category_id: categoryId(),
           visible_databases: dbType() === "redis" ? visibleDatabases() : null,
           ssl_mode: sslMode(),
+          ssh_tunnel,
         };
         await saveConnection(input);
       }
@@ -296,8 +343,8 @@ export function ConnectionForm(props: Props) {
     props.categories.find((c) => c.id === categoryId());
 
   return (
-    <div class="modal-overlay" onClick={() => props.onClose()}>
-      <div class="modal" onClick={(e) => e.stopPropagation()}>
+    <div class="modal-overlay">
+      <div class="modal">
         <h2>{isEditing() ? "Edit Connection" : "New Connection"}</h2>
         <form onSubmit={handleSubmit}>
           <div class="form-group">
@@ -513,6 +560,129 @@ export function ConnectionForm(props: Props) {
                     Require
                   </label>
                 </div>
+              </div>
+            </Show>
+
+            <div class="form-group">
+              <label>
+                <input
+                  type="checkbox"
+                  checked={sshEnabled()}
+                  onChange={(e) => setSshEnabled(e.currentTarget.checked)}
+                />
+                {" "}Connect via SSH tunnel
+              </label>
+            </div>
+
+            <Show when={sshEnabled()}>
+              <div class="ssh-tunnel-section" style={{ "border-left": "2px solid var(--border, #444)", "padding-left": "12px", "margin-bottom": "12px" }}>
+                <div class="form-row">
+                  <div class="form-group flex-1">
+                    <label for="sshHost">SSH Host</label>
+                    <input
+                      id="sshHost"
+                      type="text"
+                      value={sshHost()}
+                      onInput={(e) => setSshHost(e.currentTarget.value)}
+                      placeholder="bastion.example.com"
+                      required
+                    />
+                  </div>
+                  <div class="form-group port-field">
+                    <label for="sshPort">Port</label>
+                    <input
+                      id="sshPort"
+                      type="number"
+                      value={sshPort()}
+                      onInput={(e) => setSshPort(parseInt(e.currentTarget.value) || 22)}
+                      required
+                    />
+                  </div>
+                </div>
+
+                <div class="form-group">
+                  <label for="sshUsername">SSH Username</label>
+                  <input
+                    id="sshUsername"
+                    type="text"
+                    value={sshUsername()}
+                    onInput={(e) => setSshUsername(e.currentTarget.value)}
+                    required
+                  />
+                </div>
+
+                <div class="form-group">
+                  <label>SSH Authentication</label>
+                  <div class="radio-group">
+                    <label>
+                      <input
+                        type="radio"
+                        name="sshAuthType"
+                        checked={sshAuthType() === "agent"}
+                        onChange={() => setSshAuthType("agent")}
+                      />
+                      SSH Agent
+                    </label>
+                    <label>
+                      <input
+                        type="radio"
+                        name="sshAuthType"
+                        checked={sshAuthType() === "privatekey"}
+                        onChange={() => setSshAuthType("privatekey")}
+                      />
+                      Private Key
+                    </label>
+                    <label>
+                      <input
+                        type="radio"
+                        name="sshAuthType"
+                        checked={sshAuthType() === "password"}
+                        onChange={() => setSshAuthType("password")}
+                      />
+                      Password
+                    </label>
+                  </div>
+                </div>
+
+                <Show when={sshAuthType() === "privatekey"}>
+                  <div class="form-group">
+                    <label for="sshKeyPath">Private Key Path</label>
+                    <input
+                      id="sshKeyPath"
+                      type="text"
+                      value={sshKeyPath()}
+                      onInput={(e) => setSshKeyPath(e.currentTarget.value)}
+                      placeholder="~/.ssh/id_ed25519"
+                      required
+                    />
+                  </div>
+                  <div class="form-group">
+                    <label for="sshKeyPassphrase">Key Passphrase (optional)</label>
+                    <input
+                      id="sshKeyPassphrase"
+                      type="password"
+                      value={sshKeyPassphrase()}
+                      onInput={(e) => setSshKeyPassphrase(e.currentTarget.value)}
+                    />
+                  </div>
+                </Show>
+
+                <Show when={sshAuthType() === "password"}>
+                  <div class="form-group">
+                    <label for="sshPassword">SSH Password</label>
+                    <input
+                      id="sshPassword"
+                      type="password"
+                      value={sshPassword()}
+                      onInput={(e) => setSshPassword(e.currentTarget.value)}
+                      required
+                    />
+                  </div>
+                </Show>
+
+                <Show when={sshAuthType() === "agent"}>
+                  <div class="field-hint">Uses SSH_AUTH_SOCK (Unix) or the OpenSSH / Pageant agent (Windows).</div>
+                </Show>
               </div>
             </Show>
 

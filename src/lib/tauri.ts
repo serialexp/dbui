@@ -213,11 +213,12 @@ export async function listConstraints(
 }
 
 export async function executeQuery(
+  queryId: string,
   connectionId: string,
   query: string,
   database?: string
 ): Promise<[QueryResult, number]> {
-  return invoke("execute_query", { connectionId, query, database });
+  return invoke("execute_query", { queryId, connectionId, query, database });
 }
 
 export async function saveQueryHistory(
