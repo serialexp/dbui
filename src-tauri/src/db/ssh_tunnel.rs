@@ -7,6 +7,7 @@ use russh::Preferred;
 use russh::client::{self, Config, Handle};
 use russh::compression;
 use russh::keys::PrivateKeyWithHashAlg;
+#[cfg(unix)]
 use russh::keys::agent::client::AgentClient;
 use std::borrow::Cow;
 use std::sync::Arc;
@@ -169,6 +170,12 @@ async fn authenticate(
             }
         }
         SshAuthMethod::Agent => {
+            #[cfg(not(unix))]
+            {
+                return Err("SSH agent authentication is only supported on Unix platforms".into());
+            }
+            #[cfg(unix)]
+            {
             let mut agent = AgentClient::connect_env()
                 .await
                 .map_err(|e| format!("Could not connect to SSH agent: {}", e))?;
@@ -205,6 +212,7 @@ async fn authenticate(
                 "SSH agent authentication failed — server rejected every identity in the agent"
                     .into(),
             );
+            }
         }
     }
     Ok(())

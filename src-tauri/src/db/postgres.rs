@@ -515,7 +515,7 @@ pub async fn get_user_grants(
     .await
     .map_err(|e| format!("Failed to resolve role membership: {}", e))?;
 
-    let mut inherited_roles: Vec<String> = membership_rows
+    let inherited_roles: Vec<String> = membership_rows
         .iter()
         .map(|r| r.get("role_name"))
         .collect();
