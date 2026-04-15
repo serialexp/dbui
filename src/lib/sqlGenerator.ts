@@ -9,9 +9,9 @@ function tableRef(schema: string, table: string): string {
 
 export function generateColumnSQL(
   column: ColumnInfo,
-  table: string,
-  schema: string,
-  dbType: DatabaseType
+  _table: string,
+  _schema: string,
+  _dbType: DatabaseType
 ): string {
   const nullable = column.is_nullable ? "" : " NOT NULL";
   const defaultVal = column.column_default
@@ -27,7 +27,7 @@ export function generateIndexSQL(
   index: IndexInfo,
   table: string,
   schema: string,
-  dbType: DatabaseType
+  _dbType: DatabaseType
 ): string {
   const ref = tableRef(schema, table);
   if (index.is_primary) {
@@ -46,7 +46,7 @@ export function generateConstraintSQL(
   constraint: ConstraintInfo,
   table: string,
   schema: string,
-  dbType: DatabaseType
+  _dbType: DatabaseType
 ): string {
   const ref = tableRef(schema, table);
   const constraintType = constraint.constraint_type.toUpperCase();

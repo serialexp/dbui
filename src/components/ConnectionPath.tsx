@@ -15,6 +15,7 @@ import lockSvg from "@phosphor-icons/core/assets/regular/lock.svg?raw";
 import functionSvg from "@phosphor-icons/core/assets/regular/function.svg?raw";
 import clockCounterClockwiseSvg from "@phosphor-icons/core/assets/regular/clock-counter-clockwise.svg?raw";
 import flowArrowSvg from "@phosphor-icons/core/assets/regular/flow-arrow.svg?raw";
+import usersSvg from "@phosphor-icons/core/assets/regular/users.svg?raw";
 
 interface Props {
   connectionId: string | null;
@@ -62,6 +63,8 @@ export function ConnectionPath(props: Props) {
         return functionSvg;
       case "dependencies":
         return flowArrowSvg;
+      case "users":
+        return usersSvg;
       default:
         return rowsSvg;
     }

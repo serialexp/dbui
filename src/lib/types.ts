@@ -245,4 +245,30 @@ export interface WorkingContext {
   categoryColor: string | null;
 }
 
+export interface DatabaseUser {
+  name: string;
+  host: string | null;
+  is_superuser: boolean;
+  can_login: boolean;
+  can_create_db: boolean;
+  can_create_role: boolean;
+  is_replication: boolean;
+  valid_until: string | null;
+  member_of: string[];
+  config: string[];
+}
+
+export interface UserGrant {
+  grantee: string;
+  grantor: string | null;
+  privilege: string;
+  object_type: string;
+  object_catalog: string | null;
+  object_schema: string | null;
+  object_name: string | null;
+  column_name: string | null;
+  is_grantable: boolean;
+  inherited_from: string | null;
+}
+
 export type ObjectTab = "tables" | "views" | "functions" | "materialized_views" | "sequences" | "triggers" | "procedures";

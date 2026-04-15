@@ -1,9 +1,10 @@
 // ABOUTME: Simple wrapper component for Phosphor icons from @phosphor-icons/core.
 // ABOUTME: Renders SVG icons with configurable size by scaling the container.
 
-interface IconProps {
+export interface IconProps {
   svg: string;
   size?: number;
+  class?: string;
 }
 
 export function Icon(props: IconProps) {
@@ -17,6 +18,7 @@ export function Icon(props: IconProps) {
 
   return (
     <span
+      class={props.class}
       style={{
         display: "inline-flex",
         "align-items": "center",

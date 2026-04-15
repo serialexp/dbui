@@ -121,6 +121,34 @@ pub struct QueryProgress {
     pub bytes: Option<u64>,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DatabaseUser {
+    pub name: String,
+    pub host: Option<String>,
+    pub is_superuser: bool,
+    pub can_login: bool,
+    pub can_create_db: bool,
+    pub can_create_role: bool,
+    pub is_replication: bool,
+    pub valid_until: Option<String>,
+    pub member_of: Vec<String>,
+    pub config: Vec<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct UserGrant {
+    pub grantee: String,
+    pub grantor: Option<String>,
+    pub privilege: String,
+    pub object_type: String,
+    pub object_catalog: Option<String>,
+    pub object_schema: Option<String>,
+    pub object_name: Option<String>,
+    pub column_name: Option<String>,
+    pub is_grantable: bool,
+    pub inherited_from: Option<String>,
+}
+
 pub enum ConnectionPool {
     Postgres(sqlx::PgPool),
     Mysql(sqlx::MySqlPool),
@@ -548,6 +576,31 @@ impl ConnectionManager {
                 Ok(killed)
             }
             _ => Ok(0),
+        }
+    }
+
+    pub async fn list_users(&self, connection_id: &str) -> Result<Vec<DatabaseUser>, String> {
+        let pool = self.get_pool(connection_id).await?;
+        match pool.as_ref() {
+            ConnectionPool::Postgres(p) => postgres::list_users(p).await,
+            ConnectionPool::Mysql(p) => mysql::list_users(p).await,
+            ConnectionPool::Sqlite(_) => Err("SQLite does not have a user management system".to_string()),
+            ConnectionPool::Redis(_) => Err("Redis user management is not yet supported".to_string()),
+        }
+    }
+
+    pub async fn get_user_grants(
+        &self,
+        connection_id: &str,
+        username: &str,
+        host: Option<&str>,
+    ) -> Result<Vec<UserGrant>, String> {
+        let pool = self.get_pool(connection_id).await?;
+        match pool.as_ref() {
+            ConnectionPool::Postgres(p) => postgres::get_user_grants(p, username).await,
+            ConnectionPool::Mysql(p) => mysql::get_user_grants(p, username, host).await,
+            ConnectionPool::Sqlite(_) => Err("SQLite does not have a user management system".to_string()),
+            ConnectionPool::Redis(_) => Err("Redis user management is not yet supported".to_string()),
         }
     }
 

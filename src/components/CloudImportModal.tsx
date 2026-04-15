@@ -70,7 +70,7 @@ export function CloudImportModal(props: Props) {
   const [selectedKey, setSelectedKey] = createSignal("");
 
   // Preview state
-  const [secretValue, setSecretValue] = createSignal("");
+  const [_secretValue, setSecretValue] = createSignal("");
   const [parsedConnection, setParsedConnection] = createSignal<ParsedConnection | null>(null);
   const [connectionName, setConnectionName] = createSignal("");
   const [categoryId, setCategoryId] = createSignal<string | null>(null);

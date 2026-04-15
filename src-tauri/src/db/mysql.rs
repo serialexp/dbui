@@ -1,7 +1,7 @@
 // ABOUTME: MySQL-specific database introspection queries.
 // ABOUTME: Provides schema, table, column, index, and constraint information.
 
-use super::{ColumnInfo, ConstraintInfo, FunctionInfo, IndexInfo};
+use super::{ColumnInfo, ConstraintInfo, DatabaseUser, FunctionInfo, IndexInfo, UserGrant};
 use sqlx::Row;
 
 /// MySQL over TLS may return information_schema strings as VARBINARY instead of VARCHAR.
@@ -350,4 +350,175 @@ pub async fn list_constraints(
             }
         })
         .collect())
+}
+
+pub async fn list_users(pool: &sqlx::MySqlPool) -> Result<Vec<DatabaseUser>, String> {
+    // SELECT user(0), host(1), super_priv(2), create_user_priv(3), create_priv(4),
+    //        repl_slave_priv(5), account_locked(6), password_lifetime(7)
+    let rows = sqlx::query(
+        r#"
+        SELECT
+            user, host, super_priv, create_user_priv, create_priv,
+            repl_slave_priv, account_locked, password_lifetime
+        FROM mysql.user
+        ORDER BY user, host
+        "#,
+    )
+    .fetch_all(pool)
+    .await
+    .map_err(|e| format!("Failed to list users: {}", e))?;
+
+    Ok(rows
+        .iter()
+        .map(|r| {
+            let lifetime: Option<i32> = r.try_get(7).unwrap_or(None);
+            DatabaseUser {
+                name: get_str(r, 0),
+                host: Some(get_str(r, 1)),
+                is_superuser: get_str(r, 2) == "Y",
+                can_login: get_str(r, 6) != "Y", // account_locked = Y means cannot login
+                can_create_db: get_str(r, 4) == "Y",
+                can_create_role: get_str(r, 3) == "Y",
+                is_replication: get_str(r, 5) == "Y",
+                valid_until: lifetime.map(|l| format!("{} days", l)),
+                member_of: vec![],
+                config: vec![],
+            }
+        })
+        .collect())
+}
+
+pub async fn get_user_grants(
+    pool: &sqlx::MySqlPool,
+    username: &str,
+    host: Option<&str>,
+) -> Result<Vec<UserGrant>, String> {
+    let mut grants = Vec::new();
+    let host = host.unwrap_or("%");
+
+    // Global privileges
+    // SELECT privilege_type(0), is_grantable(1)
+    let global_rows = sqlx::query(
+        r#"
+        SELECT privilege_type, is_grantable
+        FROM information_schema.user_privileges
+        WHERE grantee = CONCAT('''', ?, '''@''', ?, '''')
+        ORDER BY privilege_type
+        "#,
+    )
+    .bind(username)
+    .bind(host)
+    .fetch_all(pool)
+    .await
+    .map_err(|e| format!("Failed to get global grants: {}", e))?;
+
+    for row in &global_rows {
+        grants.push(UserGrant {
+            grantee: username.to_string(),
+            grantor: None,
+            privilege: get_str(row, 0),
+            object_type: "server".to_string(),
+            object_catalog: None,
+            object_schema: None,
+            object_name: None,
+            column_name: None,
+            is_grantable: get_str(row, 1) == "YES",
+            inherited_from: None,
+        });
+    }
+
+    // Schema-level privileges
+    // SELECT table_schema(0), privilege_type(1), is_grantable(2)
+    let schema_rows = sqlx::query(
+        r#"
+        SELECT table_schema, privilege_type, is_grantable
+        FROM information_schema.schema_privileges
+        WHERE grantee = CONCAT('''', ?, '''@''', ?, '''')
+        ORDER BY table_schema, privilege_type
+        "#,
+    )
+    .bind(username)
+    .bind(host)
+    .fetch_all(pool)
+    .await
+    .map_err(|e| format!("Failed to get schema grants: {}", e))?;
+
+    for row in &schema_rows {
+        grants.push(UserGrant {
+            grantee: username.to_string(),
+            grantor: None,
+            privilege: get_str(row, 1),
+            object_type: "database".to_string(),
+            object_catalog: Some(get_str(row, 0)),
+            object_schema: Some(get_str(row, 0)),
+            object_name: Some(get_str(row, 0)),
+            column_name: None,
+            is_grantable: get_str(row, 2) == "YES",
+            inherited_from: None,
+        });
+    }
+
+    // Table-level privileges
+    // SELECT table_schema(0), table_name(1), privilege_type(2), is_grantable(3)
+    let table_rows = sqlx::query(
+        r#"
+        SELECT table_schema, table_name, privilege_type, is_grantable
+        FROM information_schema.table_privileges
+        WHERE grantee = CONCAT('''', ?, '''@''', ?, '''')
+        ORDER BY table_schema, table_name, privilege_type
+        "#,
+    )
+    .bind(username)
+    .bind(host)
+    .fetch_all(pool)
+    .await
+    .map_err(|e| format!("Failed to get table grants: {}", e))?;
+
+    for row in &table_rows {
+        grants.push(UserGrant {
+            grantee: username.to_string(),
+            grantor: None,
+            privilege: get_str(row, 2),
+            object_type: "table".to_string(),
+            object_catalog: Some(get_str(row, 0)),
+            object_schema: Some(get_str(row, 0)),
+            object_name: Some(get_str(row, 1)),
+            column_name: None,
+            is_grantable: get_str(row, 3) == "YES",
+            inherited_from: None,
+        });
+    }
+
+    // Column-level privileges
+    // SELECT table_schema(0), table_name(1), column_name(2), privilege_type(3), is_grantable(4)
+    let col_rows = sqlx::query(
+        r#"
+        SELECT table_schema, table_name, column_name, privilege_type, is_grantable
+        FROM information_schema.column_privileges
+        WHERE grantee = CONCAT('''', ?, '''@''', ?, '''')
+        ORDER BY table_schema, table_name, column_name, privilege_type
+        "#,
+    )
+    .bind(username)
+    .bind(host)
+    .fetch_all(pool)
+    .await
+    .map_err(|e| format!("Failed to get column grants: {}", e))?;
+
+    for row in &col_rows {
+        grants.push(UserGrant {
+            grantee: username.to_string(),
+            grantor: None,
+            privilege: get_str(row, 3),
+            object_type: "column".to_string(),
+            object_catalog: Some(get_str(row, 0)),
+            object_schema: Some(get_str(row, 0)),
+            object_name: Some(get_str(row, 1)),
+            column_name: Some(get_str(row, 2)),
+            is_grantable: get_str(row, 4) == "YES",
+            inherited_from: None,
+        });
+    }
+
+    Ok(grants)
 }

@@ -6,7 +6,7 @@ use crate::cloud::{
     KubeSecretKey, ParsedConnection,
 };
 use crate::sql_analyzer;
-use crate::db::{ColumnInfo, ConnectionManager, ConstraintInfo, FunctionInfo, IndexInfo, QueryResult, ViewDependency};
+use crate::db::{ColumnInfo, ConnectionManager, ConstraintInfo, DatabaseUser, FunctionInfo, IndexInfo, QueryResult, UserGrant, ViewDependency};
 use crate::history::{HistoryManager, QueryHistoryEntry, QueryHistoryFilter};
 use crate::storage::{self, Category, ConnectionConfig, DatabaseType, SshTunnelConfig, SslMode};
 use std::sync::OnceLock;
@@ -382,6 +382,22 @@ pub async fn execute_query(
         .await?;
     let elapsed_ms = start.elapsed().as_millis() as u64;
     Ok((result, elapsed_ms))
+}
+
+#[tauri::command]
+pub async fn list_users(connection_id: String) -> Result<Vec<DatabaseUser>, String> {
+    get_manager().list_users(&connection_id).await
+}
+
+#[tauri::command]
+pub async fn get_user_grants(
+    connection_id: String,
+    username: String,
+    host: Option<String>,
+) -> Result<Vec<UserGrant>, String> {
+    get_manager()
+        .get_user_grants(&connection_id, &username, host.as_deref())
+        .await
 }
 
 #[tauri::command]

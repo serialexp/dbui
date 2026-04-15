@@ -14,6 +14,8 @@ import type {
   ConstraintInfo,
   FunctionInfo,
   ViewDependency,
+  DatabaseUser,
+  UserGrant,
   QueryResult,
   QueryHistoryEntry,
   QueryHistoryFilter,
@@ -166,6 +168,18 @@ export async function getFunctionDefinition(
   functionName: string
 ): Promise<FunctionInfo> {
   return invoke("get_function_definition", { connectionId, database, schema, functionName });
+}
+
+export async function listUsers(connectionId: string): Promise<DatabaseUser[]> {
+  return invoke("list_users", { connectionId });
+}
+
+export async function getUserGrants(
+  connectionId: string,
+  username: string,
+  host?: string
+): Promise<UserGrant[]> {
+  return invoke("get_user_grants", { connectionId, username, host });
 }
 
 export async function getViewDependencies(

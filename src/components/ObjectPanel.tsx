@@ -255,8 +255,6 @@ export function ObjectPanel(props: Props) {
     setMoreOpen(false);
   };
 
-  const moreTabsTotal = () => MORE_TABS.reduce((sum, tab) => sum + getCount(tab), 0);
-
   return (
     <div class="object-panel">
       <div class="object-panel-header">

@@ -29,6 +29,8 @@ pub fn run() {
             set_visible_databases,
             update_connection,
             save_last_selected,
+            list_users,
+            get_user_grants,
             cancel_queries,
             connect,
             disconnect,

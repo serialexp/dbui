@@ -1,7 +1,7 @@
 // ABOUTME: Main application component for DBUI.
 // ABOUTME: Orchestrates sidebar, query editor, and results display.
 
-import { Show, onMount, onCleanup } from "solid-js";
+import { Show, createSignal, onMount, onCleanup } from "solid-js";
 import { confirm } from "@tauri-apps/plugin-dialog";
 import { listen } from "@tauri-apps/api/event";
 import type { MetadataView, WorkingContext, QueryProgress } from "./lib/types";
@@ -12,6 +12,8 @@ import {
   getFunctionDefinition,
   getViewDefinition,
   getViewDependencies,
+  listUsers,
+  getUserGrants,
   saveQueryHistory,
   listColumns,
   listIndexes,
@@ -32,6 +34,7 @@ import { CellInspector } from "./components/CellInspector";
 import { MetadataTable } from "./components/MetadataTable";
 import { FunctionViewer } from "./components/FunctionViewer";
 import { DependencyGraph } from "./components/DependencyGraph";
+import { UserViewer } from "./components/UserViewer";
 import { ConnectionPath } from "./components/ConnectionPath";
 import { QueryHistory } from "./components/QueryHistory";
 import { TabBar } from "./components/TabBar";
@@ -177,37 +180,95 @@ ORDER BY query_start DESC;`
   };
 
   const handleShowUsers = async (ctx: WorkingContext) => {
+    // Check for existing users tab for this connection
+    const existing = store.tabs.find(
+      (t) => t.connectionId === ctx.connectionId && t.viewType === "users"
+    );
+    if (existing) {
+      setActiveTab(existing.id);
+      return;
+    }
+
     const connections = await listConnections();
     const conn = connections.find((c) => c.id === ctx.connectionId);
     if (!conn) return;
 
-    const query =
-      ctx.dbType === "postgres"
-        ? `SELECT rolname AS "Role", rolsuper AS "Superuser", rolcreaterole AS "Create Role",
+    try {
+      const users = await listUsers(ctx.connectionId);
+      createTab({
+        connectionId: ctx.connectionId,
+        connectionName: conn.name,
+        dbType: ctx.dbType,
+        categoryColor: ctx.categoryColor,
+        database: ctx.database,
+        schema: ctx.schema,
+        table: null,
+        viewType: "users",
+        users,
+        selectedUser: null,
+        selectedUserHost: null,
+        userGrants: null,
+      });
+    } catch (err) {
+      // Fallback to raw query if structured user listing fails
+      const query =
+        ctx.dbType === "postgres"
+          ? `SELECT rolname AS "Role", rolsuper AS "Superuser", rolcreaterole AS "Create Role",
        rolcreatedb AS "Create DB", rolcanlogin AS "Can Login", rolreplication AS "Replication",
        rolvaliduntil AS "Valid Until"
 FROM pg_catalog.pg_roles
 ORDER BY rolname;`
-        : `SELECT user AS "User", host AS "Host", account_locked AS "Locked",
+          : `SELECT user AS "User", host AS "Host", account_locked AS "Locked",
        password_expired AS "Password Expired", password_lifetime AS "Password Lifetime"
 FROM mysql.user
 ORDER BY user;`;
+      createTab({
+        connectionId: ctx.connectionId,
+        connectionName: conn.name,
+        dbType: ctx.dbType,
+        categoryColor: ctx.categoryColor,
+        database: ctx.database,
+        schema: ctx.schema,
+        table: null,
+        viewType: null,
+        query,
+      });
+      const newTab = activeTab();
+      if (newTab) {
+        await handleExecute(query, true);
+      }
+    }
+  };
 
-    createTab({
-      connectionId: ctx.connectionId,
-      connectionName: conn.name,
-      dbType: ctx.dbType,
-      categoryColor: ctx.categoryColor,
-      database: ctx.database,
-      schema: ctx.schema,
-      table: null,
-      viewType: null,
-      query,
-    });
+  const [grantsLoading, setGrantsLoading] = createSignal(false);
 
-    const newTab = activeTab();
-    if (newTab) {
-      await handleExecute(query, true);
+  const handleUserSelect = async (username: string, host?: string) => {
+    const t = activeTab();
+    if (!t?.connectionId) return;
+    setGrantsLoading(true);
+    try {
+      const grants = await getUserGrants(t.connectionId, username, host);
+      updateActiveTab({ selectedUser: username, selectedUserHost: host ?? null, userGrants: grants });
+    } catch (err) {
+      updateActiveTab({
+        selectedUser: username,
+        selectedUserHost: host ?? null,
+        userGrants: [],
+        error: String(err),
+      });
+    } finally {
+      setGrantsLoading(false);
+    }
+  };
+
+  const handleUsersRefresh = async () => {
+    const t = activeTab();
+    if (!t?.connectionId) return;
+    try {
+      const users = await listUsers(t.connectionId);
+      updateActiveTab({ users, selectedUser: null, selectedUserHost: null, userGrants: null });
+    } catch (err) {
+      updateActiveTab({ error: String(err) });
     }
   };
 
@@ -896,7 +957,7 @@ ORDER BY user;`;
             onHistoryClick={() => setShowHistory(true)}
           />
 
-          <Show when={!tab()!.metadataView && !tab()!.functionInfo && !tab()!.dependencies}>
+          <Show when={!tab()!.metadataView && !tab()!.functionInfo && !tab()!.dependencies && !tab()!.users}>
             <QueryEditor
               value={tab()!.query}
               onChange={(q) => updateActiveTab({ query: q })}
@@ -938,7 +999,21 @@ ORDER BY user;`;
             />
           </Show>
 
-          <Show when={!tab()!.metadataView && !tab()!.functionInfo && !tab()!.dependencies}>
+          <Show when={tab()!.users}>
+            <UserViewer
+              users={tab()!.users!}
+              selectedUser={tab()!.selectedUser}
+              selectedUserHost={tab()!.selectedUserHost}
+              grants={tab()!.userGrants}
+              grantsLoading={grantsLoading()}
+              dbType={tab()!.dbType}
+              database={tab()!.database}
+              onUserSelect={handleUserSelect}
+              onRefresh={handleUsersRefresh}
+            />
+          </Show>
+
+          <Show when={!tab()!.metadataView && !tab()!.functionInfo && !tab()!.dependencies && !tab()!.users}>
             <div class="results-area">
               <div class="results-table-wrapper">
                 <ResultsTable

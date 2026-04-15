@@ -11,6 +11,8 @@ import type {
   MetadataView,
   FunctionInfo,
   ViewDependency,
+  DatabaseUser,
+  UserGrant,
   TableContext,
 } from "./types";
 
@@ -28,7 +30,7 @@ export interface Tab {
   database: string | null;
   schema: string | null;
   table: string | null;
-  viewType: "data" | "columns" | "indexes" | "constraints" | "function" | "dependencies" | null;
+  viewType: "data" | "columns" | "indexes" | "constraints" | "function" | "dependencies" | "users" | null;
 
   // Query state
   query: string;
@@ -50,6 +52,10 @@ export interface Tab {
   metadataView: MetadataView;
   functionInfo: FunctionInfo | null;
   dependencies: ViewDependency[] | null;
+  users: DatabaseUser[] | null;
+  selectedUser: string | null;
+  selectedUserHost: string | null;
+  userGrants: UserGrant[] | null;
 
   // Edit context
   tableContext: TableContext | null;
@@ -88,6 +94,10 @@ function createDefaultTab(overrides: Partial<Tab> = {}): Tab {
     metadataView: null,
     functionInfo: null,
     dependencies: null,
+    users: null,
+    selectedUser: null,
+    selectedUserHost: null,
+    userGrants: null,
     tableContext: null,
     primaryKeyColumns: [],
     hasPendingChanges: false,
@@ -96,6 +106,9 @@ function createDefaultTab(overrides: Partial<Tab> = {}): Tab {
 }
 
 export function generateTabTitle(tab: Partial<Tab>): string {
+  if (tab.viewType === "users") {
+    return tab.selectedUser ? `User: ${tab.selectedUser}` : "Users & Roles";
+  }
   if (tab.viewType === "dependencies") {
     return `Dependencies (${tab.schema || tab.database})`;
   }
@@ -172,7 +185,9 @@ function createAppStore() {
           "metadataView" in updates ||
           "functionInfo" in updates ||
           "viewType" in updates ||
-          "dependencies" in updates
+          "dependencies" in updates ||
+          "selectedUser" in updates ||
+          "users" in updates
         ) {
           tab.title = generateTabTitle(tab);
         }
