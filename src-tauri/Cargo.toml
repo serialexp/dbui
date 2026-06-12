@@ -1,6 +1,6 @@
 [package]
 name = "dbui"
-version = "0.8.2"
+version = "0.8.4"
 description = "Database explorer for PostgreSQL and MySQL"
 authors = ["you"]
 edition = "2021"
