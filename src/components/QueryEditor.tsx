@@ -28,22 +28,116 @@ export function QueryEditor(props: Props) {
   let containerRef: HTMLDivElement | undefined;
   let view: EditorView | undefined;
 
+  // Number of leading whitespace + SQL comment characters at the start of `s`.
+  // Used to skip comment lines so the executed statement begins at its first
+  // real token — the backend decides "returns rows" vs "rows affected" from the
+  // first keyword, so a leading "-- comment" would otherwise misroute a SELECT.
+  const leadingTriviaLength = (s: string): number => {
+    let i = 0;
+    while (i < s.length) {
+      const c = s[i];
+      if (c === " " || c === "\t" || c === "\r" || c === "\n") {
+        i++;
+        continue;
+      }
+      // Line comment: -- ... <newline>
+      if (c === "-" && s[i + 1] === "-") {
+        i += 2;
+        while (i < s.length && s[i] !== "\n") i++;
+        continue;
+      }
+      // Block comment: /* ... */ (nestable, like PostgreSQL)
+      if (c === "/" && s[i + 1] === "*") {
+        let depth = 1;
+        i += 2;
+        while (i < s.length && depth > 0) {
+          if (s[i] === "/" && s[i + 1] === "*") {
+            depth++;
+            i += 2;
+          } else if (s[i] === "*" && s[i + 1] === "/") {
+            depth--;
+            i += 2;
+          } else {
+            i++;
+          }
+        }
+        continue;
+      }
+      break;
+    }
+    return i;
+  };
+
   const getQueryRangeAtCursor = (
     doc: string,
     cursorPos: number
   ): { query: string; start: number; end: number } | null => {
-    // Split queries by semicolon, respecting string literals and dollar quotes
+    // Split queries by semicolon, respecting string literals, dollar quotes,
+    // and comments (so a ';' inside a comment never splits a statement).
     const queries: { query: string; start: number; end: number }[] = [];
     let currentQuery = "";
     let queryStart = 0;
     let inSingleQuote = false;
     let inDollarQuote = false;
     let dollarQuoteTag = "";
+    let inLineComment = false;
+    let inBlockComment = false;
+    let blockCommentDepth = 0;
+
+    // Push the statement accumulated in `currentQuery`. The matching range
+    // (start/end) keeps any leading comment so the cursor can still resolve a
+    // statement while sitting on its comment, but the executed `query` text has
+    // leading comments/whitespace stripped.
+    const pushQuery = (rawEnd: number) => {
+      const lead = leadingTriviaLength(currentQuery);
+      const cleaned = currentQuery.slice(lead).trim();
+      if (cleaned) {
+        queries.push({ query: cleaned, start: queryStart, end: rawEnd });
+      }
+    };
 
     for (let i = 0; i < doc.length; i++) {
       const char = doc[i];
       const nextChar = doc[i + 1];
       currentQuery += char;
+
+      // Inside a line comment: consume until newline.
+      if (inLineComment) {
+        if (char === "\n") inLineComment = false;
+        continue;
+      }
+
+      // Inside a block comment: handle nesting and termination.
+      if (inBlockComment) {
+        if (char === "/" && nextChar === "*") {
+          blockCommentDepth++;
+          currentQuery += nextChar;
+          i++;
+        } else if (char === "*" && nextChar === "/") {
+          blockCommentDepth--;
+          currentQuery += nextChar;
+          i++;
+          if (blockCommentDepth === 0) inBlockComment = false;
+        }
+        continue;
+      }
+
+      // Comment starts (only outside of string / dollar-quote literals).
+      if (!inSingleQuote && !inDollarQuote) {
+        if (char === "-" && nextChar === "-") {
+          inLineComment = true;
+          currentQuery += nextChar;
+          i++;
+          continue;
+        }
+        if (char === "/" && nextChar === "*") {
+          inBlockComment = true;
+          blockCommentDepth = 1;
+          currentQuery += nextChar;
+          i++;
+          continue;
+        }
+      }
 
       // Handle dollar quotes (PostgreSQL)
       if (char === "$" && !inSingleQuote) {
@@ -104,26 +198,16 @@ export function QueryEditor(props: Props) {
         continue;
       }
 
-      // Only split on semicolon if not inside any string
+      // Only split on semicolon if not inside any string or comment
       if (char === ";" && !inSingleQuote && !inDollarQuote) {
-        queries.push({
-          query: currentQuery.trim(),
-          start: queryStart,
-          end: i + 1,
-        });
+        pushQuery(i + 1);
         currentQuery = "";
         queryStart = i + 1;
       }
     }
 
     // Don't forget the last query if there's no trailing semicolon
-    if (currentQuery.trim()) {
-      queries.push({
-        query: currentQuery.trim(),
-        start: queryStart,
-        end: doc.length,
-      });
-    }
+    pushQuery(doc.length);
 
     // Find which query contains the cursor
     for (const q of queries) {
