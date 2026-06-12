@@ -696,35 +696,6 @@ impl ConnectionManager {
     }
 }
 
-/// Returns true if the query modifies data and won't return rows.
-/// Queries with RETURNING clauses are excluded since they produce result sets.
-fn returns_rows(query: &str) -> bool {
-    let trimmed = query.trim();
-    let upper = trimmed.to_uppercase();
-
-    // INSERT/DELETE/UPDATE with RETURNING clause produce result sets
-    if upper.contains("RETURNING") {
-        return true;
-    }
-
-    let first_word = upper
-        .split_whitespace()
-        .next()
-        .unwrap_or("");
-    matches!(
-        first_word,
-        "SELECT"
-            | "SHOW"
-            | "DESCRIBE"
-            | "DESC"
-            | "EXPLAIN"
-            | "PRAGMA"
-            | "TABLE"
-            | "VALUES"
-            | "WITH"
-    )
-}
-
 async fn execute_query_pg(
     app: &AppHandle,
     query_id: &str,
@@ -736,16 +707,89 @@ async fn execute_query_pg(
     let start = Instant::now();
     emit_progress(app, query_id, "executing", 0, 0, None, None, None);
 
-    // Use raw_sql to avoid prepared statements — the PREPARE + DESCRIBE
-    // round-trip can hang on system catalogs and connection poolers.
-    if !returns_rows(query) {
-        let result = sqlx::raw_sql(query)
-            .execute(pool)
-            .await
-            .map_err(|e| format!("Query failed: {}", e))?;
+    // Let the driver — not a SQL-text heuristic — classify each statement.
+    // fetch_many streams Either::Right(row) for result-set rows and
+    // Either::Left(tag) for a command tag carrying rows_affected. This runs the
+    // statement exactly once (avoiding the double-execution a fetch-then-execute
+    // fallback would cause for DML) while still reporting the correct
+    // "N row(s) affected" for INSERT/UPDATE/DELETE/DDL. raw_sql also avoids
+    // prepared statements, whose PREPARE + DESCRIBE round-trip can hang on
+    // system catalogs and connection poolers.
+    let mut stream = sqlx::raw_sql(query).fetch_many(pool);
+    let mut columns: Vec<String> = Vec::new();
+    let mut result_rows: Vec<Vec<serde_json::Value>> = Vec::new();
+    let mut first_row_at: Option<Instant> = None;
+    let mut last_emit = start;
+    let mut bytes_total: u64 = 0;
+    let mut rows_affected: u64 = 0;
+    let mut saw_rows = false;
 
-        let rows_affected = result.rows_affected();
-        let total_ms = start.elapsed().as_millis() as u64;
+    while let Some(item) = stream.next().await {
+        match item.map_err(|e| format!("Query failed: {}", e))? {
+            sqlx::Either::Left(tag) => {
+                // Statement that produced no result set (DML/DDL), or the
+                // trailing command tag of a SELECT (ignored once rows are seen).
+                rows_affected += tag.rows_affected();
+            }
+            sqlx::Either::Right(row) => {
+                if !saw_rows {
+                    saw_rows = true;
+                    let now = Instant::now();
+                    first_row_at = Some(now);
+                    columns = row.columns().iter().map(|c| c.name().to_string()).collect();
+                    let server_ms = now.duration_since(start).as_millis() as u64;
+                    emit_progress(
+                        app,
+                        query_id,
+                        "transferring",
+                        0,
+                        server_ms,
+                        Some(server_ms),
+                        None,
+                        Some(0),
+                    );
+                    last_emit = now;
+                }
+                let mut row_values = Vec::with_capacity(row.columns().len());
+                for (i, col) in row.columns().iter().enumerate() {
+                    let v = pg_value_to_json(&row, i, col.type_info().name());
+                    bytes_total += approx_value_bytes(&v) as u64;
+                    row_values.push(v);
+                }
+                result_rows.push(row_values);
+
+                if last_emit.elapsed() >= PROGRESS_INTERVAL {
+                    let now = Instant::now();
+                    let elapsed = now.duration_since(start).as_millis() as u64;
+                    let server_ms = first_row_at.map(|t| t.duration_since(start).as_millis() as u64);
+                    emit_progress(
+                        app,
+                        query_id,
+                        "transferring",
+                        result_rows.len(),
+                        elapsed,
+                        server_ms,
+                        None,
+                        Some(bytes_total),
+                    );
+                    last_emit = now;
+                }
+            }
+        }
+    }
+
+    let end = Instant::now();
+    let total_ms = end.duration_since(start).as_millis() as u64;
+    let (server_ms, transfer_ms) = match first_row_at {
+        Some(t1) => (
+            t1.duration_since(start).as_millis() as u64,
+            end.duration_since(t1).as_millis() as u64,
+        ),
+        None => (total_ms, 0),
+    };
+
+    if !saw_rows {
+        // No result set — report affected rows (DML/DDL), or 0 for an empty SELECT.
         emit_progress(
             app,
             query_id,
@@ -767,68 +811,6 @@ async fn execute_query_pg(
         });
     }
 
-    let mut stream = sqlx::raw_sql(query).fetch(pool);
-    let mut columns: Vec<String> = Vec::new();
-    let mut result_rows: Vec<Vec<serde_json::Value>> = Vec::new();
-    let mut first_row_at: Option<Instant> = None;
-    let mut last_emit = start;
-    let mut bytes_total: u64 = 0;
-
-    while let Some(row_res) = stream.next().await {
-        let row = row_res.map_err(|e| format!("Query failed: {}", e))?;
-        if first_row_at.is_none() {
-            let now = Instant::now();
-            first_row_at = Some(now);
-            columns = row.columns().iter().map(|c| c.name().to_string()).collect();
-            let server_ms = now.duration_since(start).as_millis() as u64;
-            emit_progress(
-                app,
-                query_id,
-                "transferring",
-                0,
-                server_ms,
-                Some(server_ms),
-                None,
-                Some(0),
-            );
-            last_emit = now;
-        }
-        let mut row_values = Vec::with_capacity(row.columns().len());
-        for (i, col) in row.columns().iter().enumerate() {
-            let v = pg_value_to_json(&row, i, col.type_info().name());
-            bytes_total += approx_value_bytes(&v) as u64;
-            row_values.push(v);
-        }
-        result_rows.push(row_values);
-
-        if last_emit.elapsed() >= PROGRESS_INTERVAL {
-            let now = Instant::now();
-            let elapsed = now.duration_since(start).as_millis() as u64;
-            let server_ms = first_row_at.map(|t| t.duration_since(start).as_millis() as u64);
-            emit_progress(
-                app,
-                query_id,
-                "transferring",
-                result_rows.len(),
-                elapsed,
-                server_ms,
-                None,
-                Some(bytes_total),
-            );
-            last_emit = now;
-        }
-    }
-
-    let end = Instant::now();
-    let total_ms = end.duration_since(start).as_millis() as u64;
-    let (server_ms, transfer_ms) = match first_row_at {
-        Some(t1) => (
-            t1.duration_since(start).as_millis() as u64,
-            end.duration_since(t1).as_millis() as u64,
-        ),
-        None => (total_ms, 0),
-    };
-
     emit_progress(
         app,
         query_id,
@@ -839,18 +821,6 @@ async fn execute_query_pg(
         Some(transfer_ms),
         Some(bytes_total),
     );
-
-    if result_rows.is_empty() {
-        return Ok(QueryResult {
-            columns: vec![],
-            rows: vec![],
-            row_count: 0,
-            message: Some("0 row(s) affected.".to_string()),
-            server_time_ms: Some(server_ms),
-            transfer_time_ms: Some(transfer_ms),
-            bytes_transferred: Some(bytes_total),
-        });
-    }
 
     Ok(QueryResult {
         columns,
@@ -997,16 +967,84 @@ async fn execute_query_mysql(
     let start = Instant::now();
     emit_progress(app, query_id, "executing", 0, 0, None, None, None);
 
-    // Use raw_sql to avoid prepared statements — MySQL's prepared statement
+    // Let the driver classify each statement via fetch_many (Either::Right(row)
+    // for result-set rows, Either::Left(tag) for a command tag with
+    // rows_affected) so a SQL-text heuristic can't misroute a SELECT. Runs each
+    // statement exactly once. raw_sql also avoids prepared statements, whose
     // protocol doesn't support many statement types (SET, KILL, etc.).
-    if !returns_rows(query) {
-        let result = sqlx::raw_sql(query)
-            .execute(pool)
-            .await
-            .map_err(|e| format!("Query failed: {}", e))?;
+    let mut stream = sqlx::raw_sql(query).fetch_many(pool);
+    let mut columns: Vec<String> = Vec::new();
+    let mut result_rows: Vec<Vec<serde_json::Value>> = Vec::new();
+    let mut first_row_at: Option<Instant> = None;
+    let mut last_emit = start;
+    let mut bytes_total: u64 = 0;
+    let mut rows_affected: u64 = 0;
+    let mut saw_rows = false;
 
-        let rows_affected = result.rows_affected();
-        let total_ms = start.elapsed().as_millis() as u64;
+    while let Some(item) = stream.next().await {
+        match item.map_err(|e| format!("Query failed: {}", e))? {
+            sqlx::Either::Left(tag) => {
+                rows_affected += tag.rows_affected();
+            }
+            sqlx::Either::Right(row) => {
+                if !saw_rows {
+                    saw_rows = true;
+                    let now = Instant::now();
+                    first_row_at = Some(now);
+                    columns = row.columns().iter().map(|c| c.name().to_string()).collect();
+                    let server_ms = now.duration_since(start).as_millis() as u64;
+                    emit_progress(
+                        app,
+                        query_id,
+                        "transferring",
+                        0,
+                        server_ms,
+                        Some(server_ms),
+                        None,
+                        Some(0),
+                    );
+                    last_emit = now;
+                }
+                let mut row_values = Vec::with_capacity(row.columns().len());
+                for (i, col) in row.columns().iter().enumerate() {
+                    let v = mysql_value_to_json(&row, i, col.type_info().name());
+                    bytes_total += approx_value_bytes(&v) as u64;
+                    row_values.push(v);
+                }
+                result_rows.push(row_values);
+
+                if last_emit.elapsed() >= PROGRESS_INTERVAL {
+                    let now = Instant::now();
+                    let elapsed = now.duration_since(start).as_millis() as u64;
+                    let server_ms = first_row_at.map(|t| t.duration_since(start).as_millis() as u64);
+                    emit_progress(
+                        app,
+                        query_id,
+                        "transferring",
+                        result_rows.len(),
+                        elapsed,
+                        server_ms,
+                        None,
+                        Some(bytes_total),
+                    );
+                    last_emit = now;
+                }
+            }
+        }
+    }
+
+    let end = Instant::now();
+    let total_ms = end.duration_since(start).as_millis() as u64;
+    let (server_ms, transfer_ms) = match first_row_at {
+        Some(t1) => (
+            t1.duration_since(start).as_millis() as u64,
+            end.duration_since(t1).as_millis() as u64,
+        ),
+        None => (total_ms, 0),
+    };
+
+    if !saw_rows {
+        // No result set — report affected rows (DML/DDL), or 0 for an empty SELECT.
         emit_progress(
             app,
             query_id,
@@ -1028,68 +1066,6 @@ async fn execute_query_mysql(
         });
     }
 
-    let mut stream = sqlx::raw_sql(query).fetch(pool);
-    let mut columns: Vec<String> = Vec::new();
-    let mut result_rows: Vec<Vec<serde_json::Value>> = Vec::new();
-    let mut first_row_at: Option<Instant> = None;
-    let mut last_emit = start;
-    let mut bytes_total: u64 = 0;
-
-    while let Some(row_res) = stream.next().await {
-        let row = row_res.map_err(|e| format!("Query failed: {}", e))?;
-        if first_row_at.is_none() {
-            let now = Instant::now();
-            first_row_at = Some(now);
-            columns = row.columns().iter().map(|c| c.name().to_string()).collect();
-            let server_ms = now.duration_since(start).as_millis() as u64;
-            emit_progress(
-                app,
-                query_id,
-                "transferring",
-                0,
-                server_ms,
-                Some(server_ms),
-                None,
-                Some(0),
-            );
-            last_emit = now;
-        }
-        let mut row_values = Vec::with_capacity(row.columns().len());
-        for (i, col) in row.columns().iter().enumerate() {
-            let v = mysql_value_to_json(&row, i, col.type_info().name());
-            bytes_total += approx_value_bytes(&v) as u64;
-            row_values.push(v);
-        }
-        result_rows.push(row_values);
-
-        if last_emit.elapsed() >= PROGRESS_INTERVAL {
-            let now = Instant::now();
-            let elapsed = now.duration_since(start).as_millis() as u64;
-            let server_ms = first_row_at.map(|t| t.duration_since(start).as_millis() as u64);
-            emit_progress(
-                app,
-                query_id,
-                "transferring",
-                result_rows.len(),
-                elapsed,
-                server_ms,
-                None,
-                Some(bytes_total),
-            );
-            last_emit = now;
-        }
-    }
-
-    let end = Instant::now();
-    let total_ms = end.duration_since(start).as_millis() as u64;
-    let (server_ms, transfer_ms) = match first_row_at {
-        Some(t1) => (
-            t1.duration_since(start).as_millis() as u64,
-            end.duration_since(t1).as_millis() as u64,
-        ),
-        None => (total_ms, 0),
-    };
-
     emit_progress(
         app,
         query_id,
@@ -1100,18 +1076,6 @@ async fn execute_query_mysql(
         Some(transfer_ms),
         Some(bytes_total),
     );
-
-    if result_rows.is_empty() {
-        return Ok(QueryResult {
-            columns: vec![],
-            rows: vec![],
-            row_count: 0,
-            message: Some("0 row(s) affected.".to_string()),
-            server_time_ms: Some(server_ms),
-            transfer_time_ms: Some(transfer_ms),
-            bytes_transferred: Some(bytes_total),
-        });
-    }
 
     Ok(QueryResult {
         columns,
@@ -1180,16 +1144,88 @@ async fn execute_query_sqlite(
     pool: &sqlx::SqlitePool,
     query: &str,
 ) -> Result<QueryResult, String> {
+    use futures::StreamExt;
+
     let start = Instant::now();
     emit_progress(app, query_id, "executing", 0, 0, None, None, None);
-    if !returns_rows(query) {
-        let result = sqlx::query(query)
-            .execute(pool)
-            .await
-            .map_err(|e| format!("Query failed: {}", e))?;
 
-        let rows_affected = result.rows_affected();
-        let total_ms = start.elapsed().as_millis() as u64;
+    // Let the driver classify each statement via fetch_many (Either::Right(row)
+    // for result-set rows, Either::Left(tag) for a command tag with
+    // rows_affected) so a SQL-text heuristic can't misroute a SELECT. Runs each
+    // statement exactly once.
+    let mut stream = sqlx::raw_sql(query).fetch_many(pool);
+    let mut columns: Vec<String> = Vec::new();
+    let mut result_rows: Vec<Vec<serde_json::Value>> = Vec::new();
+    let mut first_row_at: Option<Instant> = None;
+    let mut last_emit = start;
+    let mut bytes_total: u64 = 0;
+    let mut rows_affected: u64 = 0;
+    let mut saw_rows = false;
+
+    while let Some(item) = stream.next().await {
+        match item.map_err(|e| format!("Query failed: {}", e))? {
+            sqlx::Either::Left(tag) => {
+                rows_affected += tag.rows_affected();
+            }
+            sqlx::Either::Right(row) => {
+                if !saw_rows {
+                    saw_rows = true;
+                    let now = Instant::now();
+                    first_row_at = Some(now);
+                    columns = row.columns().iter().map(|c| c.name().to_string()).collect();
+                    let server_ms = now.duration_since(start).as_millis() as u64;
+                    emit_progress(
+                        app,
+                        query_id,
+                        "transferring",
+                        0,
+                        server_ms,
+                        Some(server_ms),
+                        None,
+                        Some(0),
+                    );
+                    last_emit = now;
+                }
+                let mut row_values = Vec::with_capacity(row.columns().len());
+                for (i, col) in row.columns().iter().enumerate() {
+                    let v = sqlite_value_to_json(&row, i, col.type_info().name());
+                    bytes_total += approx_value_bytes(&v) as u64;
+                    row_values.push(v);
+                }
+                result_rows.push(row_values);
+
+                if last_emit.elapsed() >= PROGRESS_INTERVAL {
+                    let now = Instant::now();
+                    let elapsed = now.duration_since(start).as_millis() as u64;
+                    let server_ms = first_row_at.map(|t| t.duration_since(start).as_millis() as u64);
+                    emit_progress(
+                        app,
+                        query_id,
+                        "transferring",
+                        result_rows.len(),
+                        elapsed,
+                        server_ms,
+                        None,
+                        Some(bytes_total),
+                    );
+                    last_emit = now;
+                }
+            }
+        }
+    }
+
+    let end = Instant::now();
+    let total_ms = end.duration_since(start).as_millis() as u64;
+    let (server_ms, transfer_ms) = match first_row_at {
+        Some(t1) => (
+            t1.duration_since(start).as_millis() as u64,
+            end.duration_since(t1).as_millis() as u64,
+        ),
+        None => (total_ms, 0),
+    };
+
+    if !saw_rows {
+        // No result set — report affected rows (DML/DDL), or 0 for an empty SELECT.
         emit_progress(
             app,
             query_id,
@@ -1211,60 +1247,25 @@ async fn execute_query_sqlite(
         });
     }
 
-    let rows = sqlx::query(query)
-        .fetch_all(pool)
-        .await
-        .map_err(|e| format!("Query failed: {}", e))?;
-
-    if rows.is_empty() {
-        let total_ms = start.elapsed().as_millis() as u64;
-        emit_progress(app, query_id, "done", 0, total_ms, Some(total_ms), Some(0), Some(0));
-        return Ok(QueryResult {
-            columns: vec![],
-            rows: vec![],
-            row_count: 0,
-            message: Some("0 row(s) affected.".to_string()),
-            server_time_ms: Some(total_ms),
-            transfer_time_ms: Some(0),
-            bytes_transferred: Some(0),
-        });
-    }
-
-    let columns: Vec<String> = rows[0]
-        .columns()
-        .iter()
-        .map(|c| c.name().to_string())
-        .collect();
-
-    let mut result_rows = Vec::new();
-    for row in &rows {
-        let mut row_values = Vec::new();
-        for (i, col) in row.columns().iter().enumerate() {
-            let value = sqlite_value_to_json(&row, i, col.type_info().name());
-            row_values.push(value);
-        }
-        result_rows.push(row_values);
-    }
-
-    let total_ms = start.elapsed().as_millis() as u64;
     emit_progress(
         app,
         query_id,
         "done",
         result_rows.len(),
         total_ms,
-        Some(total_ms),
-        Some(0),
-        None,
+        Some(server_ms),
+        Some(transfer_ms),
+        Some(bytes_total),
     );
+
     Ok(QueryResult {
         columns,
         row_count: result_rows.len(),
         rows: result_rows,
         message: None,
-        server_time_ms: Some(total_ms),
-        transfer_time_ms: Some(0),
-        bytes_transferred: None,
+        server_time_ms: Some(server_ms),
+        transfer_time_ms: Some(transfer_ms),
+        bytes_transferred: Some(bytes_total),
     })
 }
 
