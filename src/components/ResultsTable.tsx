@@ -4,8 +4,10 @@
 import { createSignal, createEffect, onCleanup, For, Show } from "solid-js";
 import type { QueryResult, QueryProgress, CellSelection, TableContext, DatabaseType } from "../lib/types";
 import type { RowEdit } from "../lib/updateQueryGenerator";
-import { exportAsJson, exportAsSqlInsert } from "../lib/resultExporter";
+import { exportAsCsv, exportAsJson, exportAsSqlInsert } from "../lib/resultExporter";
+import { saveTextFile, exportXlsx } from "../lib/tauri";
 import { readText } from "@tauri-apps/plugin-clipboard-manager";
+import { save } from "@tauri-apps/plugin-dialog";
 import { ContextMenu, type ContextMenuItem } from "./ContextMenu";
 
 export type FilterMode = "exact" | "prefix" | "suffix" | "contains";
@@ -34,7 +36,23 @@ interface Props {
   dbType?: DatabaseType | null;
 }
 
-type ExportFormat = "json" | "sql";
+type ExportFormat = "json" | "sql" | "csv" | "xlsx";
+type ExportDestination = "clipboard" | "file";
+
+interface ExportFormatMeta {
+  format: ExportFormat;
+  label: string;
+  extension: string;
+  /** XLSX is binary, so it can only be written to a file. */
+  clipboard: boolean;
+}
+
+const EXPORT_FORMATS: ExportFormatMeta[] = [
+  { format: "json", label: "JSON", extension: "json", clipboard: true },
+  { format: "sql", label: "SQL INSERT", extension: "sql", clipboard: true },
+  { format: "csv", label: "CSV", extension: "csv", clipboard: true },
+  { format: "xlsx", label: "Excel (XLSX)", extension: "xlsx", clipboard: false },
+];
 
 function formatBytes(n: number): string {
   if (n < 1024) return `${n} B`;
@@ -51,7 +69,13 @@ export function ResultsTable(props: Props) {
   const [editValue, setEditValue] = createSignal("");
   const [lastClickedRow, setLastClickedRow] = createSignal<number | null>(null);
   const [exportMenuOpen, setExportMenuOpen] = createSignal(false);
+  const [expandedFormat, setExpandedFormat] = createSignal<ExportFormat | null>(null);
   const [exportFeedback, setExportFeedback] = createSignal<string | null>(null);
+
+  const closeExportMenu = () => {
+    setExportMenuOpen(false);
+    setExpandedFormat(null);
+  };
   const [cellContextMenu, setCellContextMenu] = createSignal<{
     x: number;
     y: number;
@@ -61,7 +85,7 @@ export function ResultsTable(props: Props) {
 
   const handleClickOutside = (e: MouseEvent) => {
     if (exportMenuOpen() && exportDropdownRef && !exportDropdownRef.contains(e.target as Node)) {
-      setExportMenuOpen(false);
+      closeExportMenu();
     }
   };
 
@@ -263,28 +287,64 @@ export function ResultsTable(props: Props) {
     return cols.length >= 2 && cols[0] === "key" && cols[1] === "type";
   };
 
-  const handleExport = async (format: ExportFormat) => {
-    if (!props.result) return;
-    setExportMenuOpen(false);
+  const flashFeedback = (message: string) => {
+    setExportFeedback(message);
+    setTimeout(() => setExportFeedback(null), 1500);
+  };
 
-    let content: string;
-    if (format === "json") {
-      content = exportAsJson(props.result);
-    } else {
-      const ctx = props.tableContext;
-      const tableName = ctx
-        ? (ctx.schema ? `${ctx.schema}.${ctx.table}` : ctx.table)
-        : "table_name";
-      content = exportAsSqlInsert(props.result, tableName, props.dbType);
+  /** Table name used for the SQL INSERT target and the default export filename. */
+  const exportTableName = (): string => {
+    const ctx = props.tableContext;
+    if (!ctx) return "table_name";
+    return ctx.schema ? `${ctx.schema}.${ctx.table}` : ctx.table;
+  };
+
+  /** Build the text representation for the text-based formats. */
+  const buildTextContent = (format: Exclude<ExportFormat, "xlsx">): string => {
+    switch (format) {
+      case "json":
+        return exportAsJson(props.result!);
+      case "csv":
+        return exportAsCsv(props.result!);
+      case "sql":
+        return exportAsSqlInsert(props.result!, exportTableName(), props.dbType);
+    }
+  };
+
+  const handleExport = async (format: ExportFormat, destination: ExportDestination) => {
+    if (!props.result) return;
+    closeExportMenu();
+
+    const meta = EXPORT_FORMATS.find((m) => m.format === format)!;
+
+    if (destination === "clipboard") {
+      try {
+        await navigator.clipboard.writeText(buildTextContent(format as Exclude<ExportFormat, "xlsx">));
+        flashFeedback(`${meta.label} copied!`);
+      } catch {
+        flashFeedback("Copy failed");
+      }
+      return;
     }
 
+    // destination === "file"
     try {
-      await navigator.clipboard.writeText(content);
-      setExportFeedback(format === "json" ? "JSON copied!" : "SQL copied!");
-      setTimeout(() => setExportFeedback(null), 1500);
-    } catch {
-      setExportFeedback("Copy failed");
-      setTimeout(() => setExportFeedback(null), 1500);
+      const baseName = exportTableName().replace(/[^A-Za-z0-9_-]+/g, "_") || "export";
+      const path = await save({
+        defaultPath: `${baseName}.${meta.extension}`,
+        filters: [{ name: meta.label, extensions: [meta.extension] }],
+      });
+      if (!path) return; // user cancelled
+
+      if (format === "xlsx") {
+        await exportXlsx(path, props.result.columns, props.result.rows);
+      } else {
+        await saveTextFile(path, buildTextContent(format));
+      }
+      flashFeedback(`${meta.label} saved!`);
+    } catch (err) {
+      console.error("Export failed:", err);
+      flashFeedback("Export failed");
     }
   };
 
@@ -413,12 +473,36 @@ export function ResultsTable(props: Props) {
                 </button>
                 <Show when={exportMenuOpen()}>
                   <div class="export-menu">
-                    <button onClick={() => handleExport("json")}>
-                      Copy as JSON
-                    </button>
-                    <button onClick={() => handleExport("sql")}>
-                      Copy as SQL INSERT
-                    </button>
+                    <For each={EXPORT_FORMATS}>
+                      {(meta) => (
+                        <div class="export-format-group">
+                          <button
+                            class="export-format-btn"
+                            classList={{ expanded: expandedFormat() === meta.format }}
+                            onClick={() =>
+                              setExpandedFormat(
+                                expandedFormat() === meta.format ? null : meta.format
+                              )
+                            }
+                          >
+                            {meta.label}
+                            <span class="export-format-caret">›</span>
+                          </button>
+                          <Show when={expandedFormat() === meta.format}>
+                            <div class="export-destinations">
+                              <Show when={meta.clipboard}>
+                                <button onClick={() => handleExport(meta.format, "clipboard")}>
+                                  To clipboard
+                                </button>
+                              </Show>
+                              <button onClick={() => handleExport(meta.format, "file")}>
+                                To file…
+                              </button>
+                            </div>
+                          </Show>
+                        </div>
+                      )}
+                    </For>
                   </div>
                 </Show>
               </div>

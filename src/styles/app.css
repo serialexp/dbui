@@ -1187,6 +1187,207 @@ body {
   cursor: not-allowed;
 }
 
+/* AI (Ask AI) bar */
+.ai-bar {
+  display: flex;
+  gap: 8px;
+  padding: 8px 16px;
+  background: var(--bg-secondary);
+  border-bottom: 1px solid var(--border-color);
+}
+
+.ai-input {
+  flex: 1;
+  padding: 6px 10px;
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-color);
+  border-radius: 4px;
+  color: var(--text-primary);
+  font-size: 13px;
+  font-family: inherit;
+}
+
+.ai-input:focus {
+  outline: none;
+  border-color: var(--accent-color);
+}
+
+.ai-btn {
+  padding: 6px 16px;
+  border: none;
+  background: var(--accent-color);
+  color: white;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.ai-btn:hover:not(:disabled) {
+  background: var(--accent-hover);
+}
+
+.ai-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.ai-error {
+  padding: 8px 16px;
+  background: var(--bg-secondary);
+  border-bottom: 1px solid var(--border-color);
+  color: var(--error-color, #e06c75);
+  font-size: 12px;
+}
+
+/* Settings modal */
+.settings-modal {
+  max-width: 520px;
+}
+
+.settings-body {
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  overflow-y: auto;
+}
+
+.settings-hint {
+  margin: 0;
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+
+.settings-hint a {
+  color: var(--accent-color);
+}
+
+.settings-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.settings-field > span {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-primary);
+}
+
+.settings-field input,
+.settings-field select {
+  padding: 8px 10px;
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-color);
+  border-radius: 4px;
+  color: var(--text-primary);
+  font-size: 13px;
+  font-family: inherit;
+}
+
+.settings-field input:focus,
+.settings-field select:focus {
+  outline: none;
+  border-color: var(--accent-color);
+}
+
+.settings-model-row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.settings-model-row select {
+  flex: 1;
+}
+
+.settings-refresh-btn {
+  padding: 8px;
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-color);
+  border-radius: 4px;
+  color: var(--text-secondary);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.settings-refresh-btn:hover:not(:disabled) {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+
+.settings-refresh-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.settings-error {
+  color: var(--error-color, #e06c75);
+  font-size: 12px;
+}
+
+.modal-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  padding: 16px 20px;
+  border-top: 1px solid var(--border-color);
+}
+
+/* AI suggestion preview modal */
+.suggestion-modal {
+  max-width: 640px;
+}
+
+.suggestion-body {
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  overflow-y: auto;
+}
+
+.suggestion-section {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.suggestion-label {
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-secondary);
+}
+
+.suggestion-motivation {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--text-primary);
+}
+
+.suggestion-sql {
+  margin: 0;
+  padding: 12px;
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-color);
+  border-radius: 4px;
+  color: var(--text-primary);
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 13px;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  word-break: break-word;
+  max-height: 320px;
+  overflow-y: auto;
+}
+
 /* Results Table */
 .results-table {
   flex: 1;
@@ -1446,7 +1647,8 @@ tr.marked-for-deletion:hover td {
   border-radius: 4px;
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
   z-index: 100;
-  min-width: 140px;
+  min-width: 160px;
+  overflow: hidden;
 }
 
 .export-menu button {
@@ -1465,12 +1667,38 @@ tr.marked-for-deletion:hover td {
   background: var(--bg-tertiary);
 }
 
-.export-menu button:first-child {
-  border-radius: 4px 4px 0 0;
+.export-format-group:not(:last-child) {
+  border-bottom: 1px solid var(--border-color);
 }
 
-.export-menu button:last-child {
-  border-radius: 0 0 4px 4px;
+.export-format-btn {
+  display: flex !important;
+  align-items: center;
+  justify-content: space-between;
+  font-weight: 500;
+}
+
+.export-format-caret {
+  color: var(--text-secondary);
+  transition: transform 0.12s ease;
+}
+
+.export-format-btn.expanded .export-format-caret {
+  transform: rotate(90deg);
+}
+
+.export-destinations {
+  background: var(--bg-primary);
+}
+
+.export-destinations button {
+  padding-left: 24px;
+  font-size: 11px;
+  color: var(--text-secondary);
+}
+
+.export-destinations button:hover {
+  color: var(--text-primary);
 }
 
 /* Cell editing styles */

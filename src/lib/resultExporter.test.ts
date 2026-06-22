@@ -2,7 +2,7 @@
 // ABOUTME: Covers JSON and SQL INSERT export with various data types.
 
 import { describe, it, expect } from "vitest";
-import { exportAsJson, exportAsSqlInsert } from "./resultExporter";
+import { exportAsCsv, exportAsJson, exportAsSqlInsert } from "./resultExporter";
 import type { QueryResult } from "./types";
 
 describe("exportAsJson", () => {
@@ -243,5 +243,62 @@ describe("exportAsSqlInsert", () => {
     expect(exportAsSqlInsert(result, "users", null)).toBe(
       "INSERT INTO users (id, name) VALUES\n  (1, 'Alice');"
     );
+  });
+});
+
+describe("exportAsCsv", () => {
+  it("exports only a header row for an empty result", () => {
+    const result: QueryResult = {
+      columns: ["id", "name"],
+      rows: [],
+      row_count: 0,
+      message: null,
+    };
+    expect(exportAsCsv(result)).toBe("id,name");
+  });
+
+  it("exports header and data rows", () => {
+    const result: QueryResult = {
+      columns: ["id", "name"],
+      rows: [
+        [1, "Alice"],
+        [2, "Bob"],
+      ],
+      row_count: 2,
+      message: null,
+    };
+    expect(exportAsCsv(result)).toBe("id,name\r\n1,Alice\r\n2,Bob");
+  });
+
+  it("renders NULL/undefined as empty fields", () => {
+    const result: QueryResult = {
+      columns: ["a", "b"],
+      rows: [[null, undefined]],
+      row_count: 1,
+      message: null,
+    };
+    expect(exportAsCsv(result)).toBe("a,b\r\n,");
+  });
+
+  it("quotes fields containing commas, quotes, or newlines", () => {
+    const result: QueryResult = {
+      columns: ["text"],
+      rows: [["a,b"], ['say "hi"'], ["line1\nline2"]],
+      row_count: 3,
+      message: null,
+    };
+    expect(exportAsCsv(result)).toBe(
+      'text\r\n"a,b"\r\n"say ""hi"""\r\n"line1\nline2"'
+    );
+  });
+
+  it("serializes numbers, booleans, and objects", () => {
+    const result: QueryResult = {
+      columns: ["n", "flag", "obj"],
+      rows: [[42, true, { k: "v" }]],
+      row_count: 1,
+      message: null,
+    };
+    expect(exportAsCsv(result)).toBe('n,flag,obj\r\n42,true,"{""k"":""v""}"');
   });
 });
