@@ -39,4 +39,6 @@ tauri-plugin-clipboard-manager = "2.3.2"
 sqlparser = "0.61.0"
 russh = "0.60"
 futures = "0.3"
+reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
+rust_xlsxwriter = "0.95.0"
 

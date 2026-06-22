@@ -1,10 +1,12 @@
 // ABOUTME: Core library for DBUI Tauri application.
 // ABOUTME: Contains database connection management and Tauri command handlers.
 
+mod ai;
 mod cloud;
 mod commands;
 mod db;
 mod history;
+mod settings;
 mod sql_analyzer;
 mod storage;
 
@@ -74,6 +76,12 @@ pub fn run() {
             get_kube_secret_value,
             parse_connection_url,
             extract_query_table,
+            get_settings,
+            save_settings,
+            list_ollama_models,
+            generate_sql,
+            write_text_file,
+            export_xlsx,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

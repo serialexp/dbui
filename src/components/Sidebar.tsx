@@ -14,6 +14,7 @@ import { Toast } from "./Toast";
 
 import gearSvg from "@phosphor-icons/core/assets/regular/gear.svg?raw";
 import cloudArrowDownSvg from "@phosphor-icons/core/assets/regular/cloud-arrow-down.svg?raw";
+import robotSvg from "@phosphor-icons/core/assets/regular/robot.svg?raw";
 
 interface Props {
   activeConnectionId: string | null;
@@ -28,6 +29,7 @@ interface Props {
   onCategoryColorChange?: (color: string | null) => void;
   onShowProcesses: (ctx: WorkingContext) => void;
   onShowUsers: (ctx: WorkingContext) => void;
+  onShowSettings: () => void;
 }
 
 export function Sidebar(props: Props) {
@@ -133,6 +135,13 @@ export function Sidebar(props: Props) {
             title="Import from Cloud"
           >
             <Icon svg={cloudArrowDownSvg} size={16} />
+          </button>
+          <button
+            class="sidebar-icon-btn"
+            onClick={() => props.onShowSettings()}
+            title="AI Settings (Ollama)"
+          >
+            <Icon svg={robotSvg} size={16} />
           </button>
         </div>
       </div>

@@ -4,6 +4,16 @@
 export type DatabaseType = "postgres" | "mysql" | "sqlite" | "redis";
 export type SslMode = "disable" | "prefer" | "require";
 
+export interface AppSettings {
+  ollama_base_url: string;
+  ollama_model: string;
+}
+
+export interface SqlSuggestion {
+  sql: string;
+  motivation: string;
+}
+
 export interface Category {
   id: string;
   name: string;

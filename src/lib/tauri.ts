@@ -28,6 +28,8 @@ import type {
   KubeSecretKey,
   ParsedConnection,
   LastSelected,
+  AppSettings,
+  SqlSuggestion,
 } from "./types";
 
 export async function saveConnection(
@@ -230,9 +232,22 @@ export async function executeQuery(
   queryId: string,
   connectionId: string,
   query: string,
-  database?: string
+  database?: string,
+  schema?: string
 ): Promise<[QueryResult, number]> {
-  return invoke("execute_query", { queryId, connectionId, query, database });
+  return invoke("execute_query", { queryId, connectionId, query, database, schema });
+}
+
+export async function saveTextFile(path: string, contents: string): Promise<void> {
+  return invoke("write_text_file", { path, contents });
+}
+
+export async function exportXlsx(
+  path: string,
+  columns: string[],
+  rows: unknown[][]
+): Promise<void> {
+  return invoke("export_xlsx", { path, columns, rows });
 }
 
 export async function saveQueryHistory(
@@ -361,4 +376,36 @@ export async function extractQueryTable(
   dbType: string
 ): Promise<{ schema: string | null; table: string } | null> {
   return invoke("extract_query_table", { query, dbType });
+}
+
+// --- App settings + AI (Ollama) ---
+
+export async function getSettings(): Promise<AppSettings> {
+  return invoke("get_settings");
+}
+
+export async function saveSettings(settings: AppSettings): Promise<AppSettings> {
+  return invoke("save_settings", { settings });
+}
+
+export async function listOllamaModels(): Promise<string[]> {
+  return invoke("list_ollama_models");
+}
+
+export async function generateSql(
+  connectionId: string,
+  database: string,
+  schema: string,
+  dbType: string,
+  request: string,
+  currentQuery?: string
+): Promise<SqlSuggestion> {
+  return invoke("generate_sql", {
+    connectionId,
+    database,
+    schema,
+    dbType,
+    request,
+    currentQuery,
+  });
 }

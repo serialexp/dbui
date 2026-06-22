@@ -1,7 +1,7 @@
 // ABOUTME: SQL query editor using CodeMirror.
 // ABOUTME: Provides syntax highlighting and query execution.
 
-import { onMount, onCleanup, createEffect, Show } from "solid-js";
+import { onMount, onCleanup, createEffect, createSignal, Show } from "solid-js";
 import { EditorState, StateEffect, StateField, Prec } from "@codemirror/state";
 import { EditorView, keymap, Decoration, DecorationSet } from "@codemirror/view";
 import { basicSetup } from "codemirror";
@@ -22,6 +22,10 @@ interface Props {
   canGoForward?: boolean;
   onBack?: () => void;
   onForward?: () => void;
+  aiEnabled?: boolean;
+  aiBusy?: boolean;
+  aiError?: string | null;
+  onGenerate?: (request: string) => void;
 }
 
 export function QueryEditor(props: Props) {
@@ -277,6 +281,14 @@ export function QueryEditor(props: Props) {
     props.onExecute(queryToRun);
   };
 
+  const [aiRequest, setAiRequest] = createSignal("");
+
+  const handleGenerate = () => {
+    const request = aiRequest().trim();
+    if (!request || props.aiBusy || !props.onGenerate) return;
+    props.onGenerate(request);
+  };
+
   onMount(() => {
     if (!containerRef) return;
 
@@ -388,6 +400,35 @@ export function QueryEditor(props: Props) {
         </div>
         <span class="shortcut-hint">Cmd/Ctrl+Enter to run</span>
       </div>
+      <Show when={props.aiEnabled}>
+        <div class="ai-bar">
+          <input
+            type="text"
+            class="ai-input"
+            placeholder="Ask AI to write a query…"
+            value={aiRequest()}
+            disabled={props.aiBusy}
+            onInput={(e) => setAiRequest(e.currentTarget.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") {
+                e.preventDefault();
+                handleGenerate();
+              }
+            }}
+          />
+          <button
+            class="ai-btn"
+            onClick={handleGenerate}
+            disabled={props.aiBusy || !aiRequest().trim()}
+            title="Generate SQL from your request"
+          >
+            {props.aiBusy ? "Generating…" : "Ask AI"}
+          </button>
+        </div>
+        <Show when={props.aiError}>
+          <div class="ai-error">{props.aiError}</div>
+        </Show>
+      </Show>
       <div ref={containerRef} class="editor-container" />
       <div class="editor-footer">
         <button

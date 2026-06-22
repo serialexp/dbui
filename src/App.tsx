@@ -4,10 +4,12 @@
 import { Show, createSignal, onMount, onCleanup } from "solid-js";
 import { confirm } from "@tauri-apps/plugin-dialog";
 import { listen } from "@tauri-apps/api/event";
-import type { MetadataView, WorkingContext, QueryProgress } from "./lib/types";
+import type { MetadataView, WorkingContext, QueryProgress, AppSettings, SqlSuggestion } from "./lib/types";
 import {
   executeQuery,
   extractQueryTable,
+  generateSql,
+  getSettings,
   listConnections,
   getFunctionDefinition,
   getViewDefinition,
@@ -38,6 +40,8 @@ import { UserViewer } from "./components/UserViewer";
 import { ConnectionPath } from "./components/ConnectionPath";
 import { QueryHistory } from "./components/QueryHistory";
 import { TabBar } from "./components/TabBar";
+import { SettingsModal } from "./components/SettingsModal";
+import { SuggestionModal } from "./components/SuggestionModal";
 import "./styles/app.css";
 
 // Module-level map from query id to the tab id that launched the query, so
@@ -241,6 +245,80 @@ ORDER BY user;`;
   };
 
   const [grantsLoading, setGrantsLoading] = createSignal(false);
+
+  // App settings (Ollama) + AI generation state
+  const [settings, setSettings] = createSignal<AppSettings | null>(null);
+  const [showSettings, setShowSettings] = createSignal(false);
+  const [aiBusy, setAiBusy] = createSignal(false);
+  const [aiError, setAiError] = createSignal<string | null>(null);
+  const [suggestion, setSuggestion] = createSignal<SqlSuggestion | null>(null);
+
+  // Format a suggestion as `-- motivation` (one line per motivation line)
+  // followed by the SQL, so the reasoning stays visible alongside the query.
+  const formatSuggestion = (s: SqlSuggestion): string => {
+    const commented = s.motivation
+      .trim()
+      .split("\n")
+      .map((line) => `-- ${line}`)
+      .join("\n");
+    return commented ? `${commented}\n${s.sql.trim()}` : s.sql.trim();
+  };
+
+  const handleInsertSuggestion = () => {
+    const s = suggestion();
+    if (!s) return;
+    const existing = activeTab()?.query ?? "";
+    const block = formatSuggestion(s);
+    const next = existing.trim()
+      ? `${existing.trimEnd()}\n\n${block}\n`
+      : `${block}\n`;
+    updateActiveTab({ query: next });
+    setSuggestion(null);
+  };
+
+  const handleReplaceWithSuggestion = () => {
+    const s = suggestion();
+    if (!s) return;
+    updateActiveTab({ query: formatSuggestion(s) });
+    setSuggestion(null);
+  };
+
+  const refreshSettings = async () => {
+    try {
+      setSettings(await getSettings());
+    } catch (e) {
+      console.error("Failed to load settings", e);
+    }
+  };
+  onMount(refreshSettings);
+
+  const aiEnabled = () =>
+    !!settings()?.ollama_model?.trim() && !!activeTab()?.connectionId;
+
+  const handleGenerate = async (request: string) => {
+    const t = activeTab();
+    if (!t?.connectionId || !t.database || !t.schema) {
+      setAiError("Select a connection, database, and schema first.");
+      return;
+    }
+    setAiBusy(true);
+    setAiError(null);
+    try {
+      const result = await generateSql(
+        t.connectionId,
+        t.database,
+        t.schema,
+        t.dbType ?? "sql",
+        request,
+        t.query
+      );
+      setSuggestion(result);
+    } catch (e) {
+      setAiError(String(e));
+    } finally {
+      setAiBusy(false);
+    }
+  };
 
   const handleUserSelect = async (username: string, host?: string) => {
     const t = activeTab();
@@ -628,7 +706,7 @@ ORDER BY user;`;
     queryIdToTabId.set(queryId, tab.id);
 
     try {
-      const [res, backendTime] = await executeQuery(queryId, connId, queryToExecute, db);
+      const [res, backendTime] = await executeQuery(queryId, connId, queryToExecute, db, sch);
       updateActiveTab({ result: res, loading: false });
 
       const historyId = crypto.randomUUID();
@@ -933,6 +1011,7 @@ ORDER BY user;`;
         onCategoryColorChange={handleCategoryColorChange}
         onShowProcesses={handleShowProcesses}
         onShowUsers={handleShowUsers}
+        onShowSettings={() => setShowSettings(true)}
       />
       <main class="main-content">
         <Show when={store.tabs.length > 0}>
@@ -968,6 +1047,10 @@ ORDER BY user;`;
               canGoForward={canGoForward()}
               onBack={goBack}
               onForward={goForward}
+              aiEnabled={aiEnabled()}
+              aiBusy={aiBusy()}
+              aiError={aiError()}
+              onGenerate={handleGenerate}
             />
           </Show>
 
@@ -1058,6 +1141,24 @@ ORDER BY user;`;
           />
         </Show>
       </main>
+      <Show when={showSettings()}>
+        <SettingsModal
+          onClose={() => setShowSettings(false)}
+          onSaved={() => {
+            refreshSettings();
+            setShowSettings(false);
+          }}
+        />
+      </Show>
+      <Show when={suggestion()}>
+        <SuggestionModal
+          motivation={suggestion()!.motivation}
+          sql={suggestion()!.sql}
+          onInsert={handleInsertSuggestion}
+          onReplace={handleReplaceWithSuggestion}
+          onClose={() => setSuggestion(null)}
+        />
+      </Show>
     </div>
   );
 }

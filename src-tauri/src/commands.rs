@@ -8,6 +8,8 @@ use crate::cloud::{
 use crate::sql_analyzer;
 use crate::db::{ColumnInfo, ConnectionManager, ConstraintInfo, DatabaseUser, FunctionInfo, IndexInfo, QueryResult, UserGrant, ViewDependency};
 use crate::history::{HistoryManager, QueryHistoryEntry, QueryHistoryFilter};
+use crate::settings::{self, AppSettings};
+use crate::ai;
 use crate::storage::{self, Category, ConnectionConfig, DatabaseType, SshTunnelConfig, SslMode};
 use std::sync::OnceLock;
 use tauri::Manager;
@@ -375,10 +377,18 @@ pub async fn execute_query(
     connection_id: String,
     query: String,
     database: Option<String>,
+    schema: Option<String>,
 ) -> Result<(QueryResult, u64), String> {
     let start = std::time::Instant::now();
     let result = get_manager()
-        .execute_query(&app, &query_id, &connection_id, &query, database.as_deref())
+        .execute_query(
+            &app,
+            &query_id,
+            &connection_id,
+            &query,
+            database.as_deref(),
+            schema.as_deref(),
+        )
         .await?;
     let elapsed_ms = start.elapsed().as_millis() as u64;
     Ok((result, elapsed_ms))
@@ -593,4 +603,120 @@ pub fn extract_query_table(
     db_type: String,
 ) -> Option<sql_analyzer::QueryTableInfo> {
     sql_analyzer::extract_single_table(&query, &db_type)
+}
+
+// --- App settings + AI (Ollama) ---
+
+#[tauri::command]
+pub fn get_settings(app: tauri::AppHandle) -> Result<AppSettings, String> {
+    let config_dir = app
+        .path()
+        .app_config_dir()
+        .map_err(|e| format!("Failed to get config directory: {}", e))?;
+    Ok(settings::load_settings(&config_dir))
+}
+
+#[tauri::command]
+pub fn save_settings(app: tauri::AppHandle, settings: AppSettings) -> Result<AppSettings, String> {
+    let config_dir = app
+        .path()
+        .app_config_dir()
+        .map_err(|e| format!("Failed to get config directory: {}", e))?;
+    crate::settings::save_settings(&config_dir, &settings)
+}
+
+#[tauri::command]
+pub async fn list_ollama_models(app: tauri::AppHandle) -> Result<Vec<String>, String> {
+    let config_dir = app
+        .path()
+        .app_config_dir()
+        .map_err(|e| format!("Failed to get config directory: {}", e))?;
+    let settings = settings::load_settings(&config_dir);
+    ai::list_models(&settings.ollama_base_url).await
+}
+
+#[tauri::command]
+pub async fn generate_sql(
+    app: tauri::AppHandle,
+    connection_id: String,
+    database: String,
+    schema: String,
+    db_type: String,
+    request: String,
+    current_query: Option<String>,
+) -> Result<ai::SqlSuggestion, String> {
+    let config_dir = app
+        .path()
+        .app_config_dir()
+        .map_err(|e| format!("Failed to get config directory: {}", e))?;
+    let settings = settings::load_settings(&config_dir);
+    if settings.ollama_model.trim().is_empty() {
+        return Err("No Ollama model configured. Open Settings to choose one.".to_string());
+    }
+
+    ai::generate_sql(
+        get_manager(),
+        &settings.ollama_base_url,
+        &settings.ollama_model,
+        &connection_id,
+        &database,
+        &schema,
+        &db_type,
+        &request,
+        current_query.as_deref(),
+    )
+    .await
+}
+
+/// Write UTF-8 text to a user-chosen path (selected via the frontend save
+/// dialog). Used for JSON/SQL/CSV file exports — the content is generated in
+/// the (unit-tested) TS layer and just persisted here.
+#[tauri::command]
+pub fn write_text_file(path: String, contents: String) -> Result<(), String> {
+    std::fs::write(&path, contents).map_err(|e| format!("Failed to write file: {}", e))
+}
+
+/// Write a result set to an .xlsx workbook at a user-chosen path. Cells are
+/// typed from the JSON value: numbers and booleans become native Excel cells,
+/// NULL becomes a blank cell, and strings/arrays/objects become text.
+#[tauri::command]
+pub fn export_xlsx(
+    path: String,
+    columns: Vec<String>,
+    rows: Vec<Vec<serde_json::Value>>,
+) -> Result<(), String> {
+    use rust_xlsxwriter::Workbook;
+    use serde_json::Value;
+
+    let mut workbook = Workbook::new();
+    let sheet = workbook.add_worksheet();
+
+    for (col, name) in columns.iter().enumerate() {
+        sheet
+            .write_string(0, col as u16, name)
+            .map_err(|e| format!("Failed to build xlsx: {}", e))?;
+    }
+
+    for (r, row) in rows.iter().enumerate() {
+        let excel_row = (r + 1) as u32;
+        for (c, value) in row.iter().enumerate() {
+            let col = c as u16;
+            let res = match value {
+                Value::Null => Ok(&mut *sheet),
+                Value::Bool(b) => sheet.write_boolean(excel_row, col, *b),
+                Value::Number(n) => match n.as_f64() {
+                    Some(f) => sheet.write_number(excel_row, col, f),
+                    None => sheet.write_string(excel_row, col, &n.to_string()),
+                },
+                Value::String(s) => sheet.write_string(excel_row, col, s),
+                other => sheet.write_string(excel_row, col, &other.to_string()),
+            };
+            res.map_err(|e| format!("Failed to build xlsx: {}", e))?;
+        }
+    }
+
+    workbook
+        .save(&path)
+        .map_err(|e| format!("Failed to write xlsx: {}", e))?;
+    Ok(())
 }

@@ -661,10 +661,11 @@ impl ConnectionManager {
         connection_id: &str,
         query: &str,
         database: Option<&str>,
+        schema: Option<&str>,
     ) -> Result<QueryResult, String> {
         let pool = self.get_pool(connection_id).await?;
         match pool.as_ref() {
-            ConnectionPool::Postgres(p) => execute_query_pg(app, query_id, p, query).await,
+            ConnectionPool::Postgres(p) => execute_query_pg(app, query_id, p, query, schema).await,
             ConnectionPool::Mysql(p) => execute_query_mysql(app, query_id, p, query).await,
             ConnectionPool::Sqlite(p) => execute_query_sqlite(app, query_id, p, query).await,
             ConnectionPool::Redis(c) => {
@@ -701,11 +702,28 @@ async fn execute_query_pg(
     query_id: &str,
     pool: &sqlx::PgPool,
     query: &str,
+    schema: Option<&str>,
 ) -> Result<QueryResult, String> {
     use futures::StreamExt;
 
     let start = Instant::now();
     emit_progress(app, query_id, "executing", 0, 0, None, None, None);
+
+    // A Postgres query must always run against an explicit schema. We never
+    // silently fall back to the server's default search_path (which would
+    // resolve unqualified names against public) — that hid the real problem
+    // of an unset schema. Fail loudly instead.
+    let schema = schema.filter(|s| !s.is_empty()).ok_or_else(|| {
+        "Query failed: no schema selected — a schema is required for Postgres queries".to_string()
+    })?;
+    // Apply the selected schema as the session search_path so unqualified table
+    // references resolve against it (matching DataGrip/pgAdmin behaviour).
+    // raw_sql runs every statement in the batch on the same pooled connection,
+    // so prefixing SET makes search_path take effect for the user's query. The
+    // SET emits a command tag (Left, rows_affected 0) that the loop ignores.
+    // Quote the identifier; double any embedded quotes to stay safe.
+    let escaped = schema.replace('"', "\"\"");
+    let combined = format!("SET search_path TO \"{}\", public;\n{}", escaped, query);
 
     // Let the driver — not a SQL-text heuristic — classify each statement.
     // fetch_many streams Either::Right(row) for result-set rows and
@@ -715,7 +733,7 @@ async fn execute_query_pg(
     // "N row(s) affected" for INSERT/UPDATE/DELETE/DDL. raw_sql also avoids
     // prepared statements, whose PREPARE + DESCRIBE round-trip can hang on
     // system catalogs and connection poolers.
-    let mut stream = sqlx::raw_sql(query).fetch_many(pool);
+    let mut stream = sqlx::raw_sql(&combined).fetch_many(pool);
     let mut columns: Vec<String> = Vec::new();
     let mut result_rows: Vec<Vec<serde_json::Value>> = Vec::new();
     let mut first_row_at: Option<Instant> = None;
