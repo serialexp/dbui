@@ -302,6 +302,38 @@ pub async fn create_database(pool: &sqlx::MySqlPool, name: &str) -> Result<(), S
     Ok(())
 }
 
+/// Whether the current user may run CREATE DATABASE. Only a *global* grant
+/// (`ON *.*`) of the bare `CREATE` privilege (or `ALL PRIVILEGES`) permits it —
+/// database-scoped grants do not. `SHOW GRANTS FOR CURRENT_USER` needs no
+/// special privilege, so this works for limited accounts too.
+pub async fn can_create_database(pool: &sqlx::MySqlPool) -> Result<bool, String> {
+    let rows = sqlx::query("SHOW GRANTS FOR CURRENT_USER")
+        .fetch_all(pool)
+        .await
+        .map_err(|e| format!("Failed to check create privilege: {}", e))?;
+
+    for r in &rows {
+        let grant: String = r.try_get(0).unwrap_or_default();
+        let upper = grant.to_uppercase();
+
+        // Isolate the privilege list of a global grant: "GRANT <privs> ON *.* ...".
+        let Some((head, _)) = upper.split_once(" ON *.*") else {
+            continue;
+        };
+        let privs = head.strip_prefix("GRANT ").unwrap_or(head);
+
+        // Exact token match so "CREATE VIEW"/"CREATE ROUTINE"/etc. don't count.
+        let has_create = privs
+            .split(',')
+            .map(str::trim)
+            .any(|p| p == "CREATE" || p == "ALL PRIVILEGES");
+        if has_create {
+            return Ok(true);
+        }
+    }
+    Ok(false)
+}
+
 pub async fn list_constraints(
     pool: &sqlx::MySqlPool,
     database: &str,

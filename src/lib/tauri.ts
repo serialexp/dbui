@@ -38,6 +38,12 @@ export async function saveConnection(
   return invoke("save_connection", { input });
 }
 
+export async function testConnection(
+  input: SaveConnectionInput
+): Promise<void> {
+  return invoke("test_connection", { input });
+}
+
 export async function listConnections(): Promise<ConnectionConfig[]> {
   return invoke("list_connections");
 }
@@ -100,11 +106,24 @@ export async function createDatabase(
   return invoke("create_database", { connectionId, name });
 }
 
+export async function canCreateDatabase(
+  connectionId: string
+): Promise<boolean> {
+  return invoke("can_create_database", { connectionId });
+}
+
 export async function createSchema(
   connectionId: string,
   name: string
 ): Promise<void> {
   return invoke("create_schema", { connectionId, name });
+}
+
+export async function canCreateSchema(
+  connectionId: string,
+  database: string
+): Promise<boolean> {
+  return invoke("can_create_schema", { connectionId, database });
 }
 
 export async function listTables(

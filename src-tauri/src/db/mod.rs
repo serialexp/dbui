@@ -177,7 +177,23 @@ impl ConnectionManager {
 
     pub async fn connect(&self, config: &ConnectionConfig) -> Result<String, String> {
         let connection_id = config.id.clone();
+        let (pool, tunnel) = Self::build_pool(config).await?;
 
+        let active = ActiveConnection {
+            pool: Arc::new(pool),
+            _tunnel: tunnel,
+        };
+        let mut pools = self.pools.write().await;
+        pools.insert(connection_id.clone(), active);
+        Ok(connection_id)
+    }
+
+    /// Establish a connection pool (and SSH tunnel, if configured) for `config`
+    /// without registering it in the manager. Shared by `connect` (which keeps
+    /// the pool) and `test_connection` (which drops it immediately).
+    async fn build_pool(
+        config: &ConnectionConfig,
+    ) -> Result<(ConnectionPool, Option<TunnelHandle>), String> {
         // SQLite has no network connection so SSH tunneling does not apply.
         // For other database types, if an SSH tunnel is configured, establish
         // it first and route the DB connection through the local forwarded port.
@@ -269,13 +285,39 @@ impl ConnectionManager {
             }
         };
 
-        let active = ActiveConnection {
-            pool: Arc::new(pool),
-            _tunnel: tunnel,
-        };
-        let mut pools = self.pools.write().await;
-        pools.insert(connection_id.clone(), active);
-        Ok(connection_id)
+        Ok((pool, tunnel))
+    }
+
+    /// Verify that `config` can actually establish a working connection.
+    /// Builds the pool (and tunnel) exactly as `connect` would, runs a trivial
+    /// probe query, then tears everything down. Nothing is persisted or kept.
+    pub async fn test_connection(&self, config: &ConnectionConfig) -> Result<(), String> {
+        let (pool, _tunnel) = Self::build_pool(config).await?;
+        match &pool {
+            ConnectionPool::Postgres(p) => {
+                sqlx::query("SELECT 1")
+                    .execute(p)
+                    .await
+                    .map_err(|e| format!("Connection test query failed: {}", e))?;
+            }
+            ConnectionPool::Mysql(p) => {
+                sqlx::query("SELECT 1")
+                    .execute(p)
+                    .await
+                    .map_err(|e| format!("Connection test query failed: {}", e))?;
+            }
+            ConnectionPool::Sqlite(p) => {
+                sqlx::query("SELECT 1")
+                    .execute(p)
+                    .await
+                    .map_err(|e| format!("Connection test query failed: {}", e))?;
+            }
+            // Building the Redis ConnectionManager already establishes and
+            // validates the connection, so reaching here means success.
+            ConnectionPool::Redis(_) => {}
+        }
+        // pool and tunnel are dropped here, closing the connection.
+        Ok(())
     }
 
     pub async fn disconnect(&self, connection_id: &str) -> Result<(), String> {
@@ -322,6 +364,30 @@ impl ConnectionManager {
             ConnectionPool::Mysql(p) => mysql::create_database(p, name).await,
             ConnectionPool::Sqlite(_) => Err("SQLite does not support CREATE DATABASE".to_string()),
             ConnectionPool::Redis(_) => Err("Redis does not support CREATE DATABASE".to_string()),
+        }
+    }
+
+    pub async fn can_create_database(&self, connection_id: &str) -> Result<bool, String> {
+        let pool = self.get_pool(connection_id).await?;
+        match pool.as_ref() {
+            ConnectionPool::Postgres(p) => postgres::can_create_database(p).await,
+            ConnectionPool::Mysql(p) => mysql::can_create_database(p).await,
+            ConnectionPool::Sqlite(_) | ConnectionPool::Redis(_) => Ok(false),
+        }
+    }
+
+    pub async fn can_create_schema(
+        &self,
+        connection_id: &str,
+        database: &str,
+    ) -> Result<bool, String> {
+        let pool = self.get_pool(connection_id).await?;
+        match pool.as_ref() {
+            ConnectionPool::Postgres(p) => postgres::can_create_schema(p, database).await,
+            // Only Postgres has schemas distinct from databases.
+            ConnectionPool::Mysql(_) | ConnectionPool::Sqlite(_) | ConnectionPool::Redis(_) => {
+                Ok(false)
+            }
         }
     }
 

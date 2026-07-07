@@ -3,7 +3,7 @@
 
 import { createSignal, createEffect, Show, For, onMount, onCleanup } from "solid-js";
 import type { DatabaseType, SslMode, SaveConnectionInput, UpdateConnectionInput, Category, ConnectionConfig, SshTunnelConfig, SshAuthMethod } from "../lib/types";
-import { saveConnection, updateConnection } from "../lib/tauri";
+import { saveConnection, updateConnection, testConnection } from "../lib/tauri";
 
 interface Props {
   categories: Category[];
@@ -35,6 +35,8 @@ export function ConnectionForm(props: Props) {
   const [sshPassword, setSshPassword] = createSignal("");
   const [error, setError] = createSignal<string | null>(null);
   const [saving, setSaving] = createSignal(false);
+  const [testing, setTesting] = createSignal(false);
+  const [testResult, setTestResult] = createSignal<{ ok: boolean; message: string } | null>(null);
   const [updatingFromUrl, setUpdatingFromUrl] = createSignal(false);
   const [updatingFromFields, setUpdatingFromFields] = createSignal(false);
 
@@ -288,44 +290,52 @@ export function ConnectionForm(props: Props) {
     };
   };
 
+  /** Assemble the connection settings currently entered in the form. */
+  const buildConnectionInput = (): SaveConnectionInput => ({
+    name: name(),
+    db_type: dbType(),
+    host: dbType() === "sqlite" ? filePath() : host(),
+    port: dbType() === "sqlite" ? 0 : port(),
+    username: dbType() === "sqlite" ? "" : username(),
+    password: dbType() === "sqlite" ? "" : password(),
+    database: dbType() === "sqlite" ? null : database() || null,
+    category_id: categoryId(),
+    visible_databases: dbType() === "redis" ? visibleDatabases() : null,
+    ssl_mode: sslMode(),
+    ssh_tunnel: buildSshConfig(),
+  });
+
+  const handleTest = async () => {
+    setError(null);
+    setTestResult(null);
+    setTesting(true);
+    try {
+      await testConnection(buildConnectionInput());
+      setTestResult({ ok: true, message: "Connection successful." });
+    } catch (err) {
+      setTestResult({
+        ok: false,
+        message: err instanceof Error ? err.message : String(err),
+      });
+    } finally {
+      setTesting(false);
+    }
+  };
+
   const handleSubmit = async (e: Event) => {
     e.preventDefault();
     setError(null);
     setSaving(true);
 
     try {
-      const ssh_tunnel = buildSshConfig();
       if (isEditing()) {
         const input: UpdateConnectionInput = {
           id: props.connection!.id,
-          name: name(),
-          db_type: dbType(),
-          host: dbType() === "sqlite" ? filePath() : host(),
-          port: dbType() === "sqlite" ? 0 : port(),
-          username: dbType() === "sqlite" ? "" : username(),
-          password: dbType() === "sqlite" ? "" : password(),
-          database: dbType() === "sqlite" ? null : database() || null,
-          category_id: categoryId(),
-          visible_databases: dbType() === "redis" ? visibleDatabases() : null,
-          ssl_mode: sslMode(),
-          ssh_tunnel,
+          ...buildConnectionInput(),
         };
         await updateConnection(input);
       } else {
-        const input: SaveConnectionInput = {
-          name: name(),
-          db_type: dbType(),
-          host: dbType() === "sqlite" ? filePath() : host(),
-          port: dbType() === "sqlite" ? 0 : port(),
-          username: dbType() === "sqlite" ? "" : username(),
-          password: dbType() === "sqlite" ? "" : password(),
-          database: dbType() === "sqlite" ? null : database() || null,
-          category_id: categoryId(),
-          visible_databases: dbType() === "redis" ? visibleDatabases() : null,
-          ssl_mode: sslMode(),
-          ssh_tunnel,
-        };
-        await saveConnection(input);
+        await saveConnection(buildConnectionInput());
       }
       props.onSaved();
       props.onClose();
@@ -338,9 +348,6 @@ export function ConnectionForm(props: Props) {
 
   const isServerBased = () => dbType() !== "sqlite";
   const isRedis = () => dbType() === "redis";
-
-  const selectedCategory = () =>
-    props.categories.find((c) => c.id === categoryId());
 
   return (
     <div class="modal-overlay">
@@ -704,7 +711,21 @@ export function ConnectionForm(props: Props) {
 
           {error() && <div class="error">{error()}</div>}
 
+          <Show when={testResult()}>
+            <div class={testResult()!.ok ? "success" : "error"}>
+              {testResult()!.message}
+            </div>
+          </Show>
+
           <div class="form-actions">
+            <button
+              type="button"
+              class="test-connection-btn"
+              onClick={handleTest}
+              disabled={testing() || saving()}
+            >
+              {testing() ? "Testing..." : "Test"}
+            </button>
             <button type="button" onClick={() => props.onClose()}>
               Cancel
             </button>

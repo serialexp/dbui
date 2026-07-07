@@ -12,6 +12,10 @@ import {
   listSchemas,
   switchDatabase,
   saveLastSelected,
+  canCreateDatabase,
+  createDatabase,
+  createSchema,
+  canCreateSchema as checkCanCreateSchema,
 } from "../lib/tauri";
 
 import xSvg from "@phosphor-icons/core/assets/regular/x.svg?raw";
@@ -42,6 +46,15 @@ export function ConnectDialog(props: Props) {
   const [selectedDatabase, setSelectedDatabase] = createSignal<string | null>(null);
   const [schemasFetched, setSchemasFetched] = createSignal<string[]>([]);
   const [loadingSchemas, setLoadingSchemas] = createSignal(false);
+  const [canCreateDb, setCanCreateDb] = createSignal(false);
+  const [showNewDbInput, setShowNewDbInput] = createSignal(false);
+  const [newDbName, setNewDbName] = createSignal("");
+  const [creatingDb, setCreatingDb] = createSignal(false);
+  // Per-selected-database schema-creation state (Postgres only).
+  const [canCreateSchema, setCanCreateSchema] = createSignal(false);
+  const [showNewSchemaInput, setShowNewSchemaInput] = createSignal(false);
+  const [newSchemaName, setNewSchemaName] = createSignal("");
+  const [creatingSchema, setCreatingSchema] = createSignal(false);
 
   onMount(async () => {
     try {
@@ -89,12 +102,27 @@ export function ConnectDialog(props: Props) {
     setSelectedConnection(conn);
     setLoading(true);
     setError(null);
+    setCanCreateDb(false);
+    setShowNewDbInput(false);
+    setNewDbName("");
+    setCanCreateSchema(false);
+    setShowNewSchemaInput(false);
+    setNewSchemaName("");
 
     try {
       setLoadingStatus(`Connecting to ${conn.name}...`);
       await connect(conn.id);
       setLoadingStatus("Listing databases...");
       const databases = await listDatabases(conn.id);
+
+      // Only Postgres/MySQL support CREATE DATABASE; check the session's
+      // privilege so we can offer an inline "New database" action. A failed
+      // check simply hides the button and never blocks connecting.
+      if (conn.db_type === "postgres" || conn.db_type === "mysql") {
+        canCreateDatabase(conn.id)
+          .then(setCanCreateDb)
+          .catch(() => setCanCreateDb(false));
+      }
 
       const discovered: DiscoveredEntry[] = [];
 
@@ -159,6 +187,7 @@ export function ConnectDialog(props: Props) {
         // Select the first previously-used database in the left column
         if (dbsToFetch.length > 0) {
           setSelectedDatabase(dbsToFetch[0]);
+          refreshSchemaPermission(conn, dbsToFetch[0]);
         } else {
           setSelectedDatabase(null);
         }
@@ -214,10 +243,30 @@ export function ConnectDialog(props: Props) {
     }
   };
 
+  /** Re-evaluate whether the current user may create a schema in `db`. */
+  const refreshSchemaPermission = (conn: ConnectionConfig, db: string) => {
+    if (conn.db_type !== "postgres") {
+      setCanCreateSchema(false);
+      return;
+    }
+    checkCanCreateSchema(conn.id, db)
+      .then(setCanCreateSchema)
+      .catch(() => setCanCreateSchema(false));
+  };
+
   const selectDatabase = async (db: string) => {
     setSelectedDatabase(db);
+    setShowNewSchemaInput(false);
+    setNewSchemaName("");
     const conn = selectedConnection();
-    if (!conn || conn.db_type !== "postgres") return;
+    if (!conn || conn.db_type !== "postgres") {
+      setCanCreateSchema(false);
+      return;
+    }
+    // Permission is per-database, so re-check on every switch (fire-and-forget
+    // so it never blocks schema loading).
+    setCanCreateSchema(false);
+    refreshSchemaPermission(conn, db);
     if (schemasFetched().includes(db)) return;
 
     setLoadingSchemas(true);
@@ -246,6 +295,79 @@ export function ConnectDialog(props: Props) {
       setEntries((prev) => prev.filter((e) => e.database !== db));
     } finally {
       setLoadingSchemas(false);
+    }
+  };
+
+  const handleCreateDatabase = async () => {
+    const conn = selectedConnection();
+    const name = newDbName().trim();
+    if (!conn || !name || creatingDb()) return;
+
+    setCreatingDb(true);
+    setError(null);
+    try {
+      await createDatabase(conn.id, name);
+      setShowNewDbInput(false);
+      setNewDbName("");
+
+      if (conn.db_type === "postgres") {
+        // Add a placeholder so the new DB shows in the left column, then
+        // fetch its schemas (a fresh DB has `public`) and select it.
+        setEntries((prev) =>
+          prev.some((e) => e.database === name)
+            ? prev
+            : [...prev, { database: name, schema: "", checked: false, alreadyExists: false }],
+        );
+        await selectDatabase(name);
+      } else {
+        // MySQL: the database itself is the context — add it pre-checked.
+        setEntries((prev) => {
+          if (prev.some((e) => e.database === name)) return prev;
+          const id = makeContextId(conn.id, name, "");
+          const alreadyExists = props.existingContexts.some((c) => c.id === id);
+          return [
+            ...prev,
+            { database: name, schema: "", checked: !alreadyExists, alreadyExists },
+          ];
+        });
+        setSelectedDatabase(name);
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setCreatingDb(false);
+    }
+  };
+
+  const handleCreateSchema = async () => {
+    const conn = selectedConnection();
+    const db = selectedDatabase();
+    const name = newSchemaName().trim();
+    if (!conn || !db || !name || creatingSchema()) return;
+
+    setCreatingSchema(true);
+    setError(null);
+    try {
+      // Ensure the pool is connected to the target database before CREATE SCHEMA.
+      await switchDatabase(conn.id, db);
+      await createSchema(conn.id, name);
+      setShowNewSchemaInput(false);
+      setNewSchemaName("");
+
+      // Add the new schema as a selectable, pre-checked entry.
+      setEntries((prev) => {
+        if (prev.some((e) => e.database === db && e.schema === name)) return prev;
+        const id = makeContextId(conn.id, db, name);
+        const alreadyExists = props.existingContexts.some((c) => c.id === id);
+        // Drop any placeholder (schema === "") for this database.
+        const cleaned = prev.filter((e) => !(e.database === db && e.schema === ""));
+        return [...cleaned, { database: db, schema: name, checked: !alreadyExists, alreadyExists }];
+      });
+      setSchemasFetched((prev) => (prev.includes(db) ? prev : [...prev, db]));
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setCreatingSchema(false);
     }
   };
 
@@ -353,6 +475,57 @@ export function ConnectDialog(props: Props) {
     return groups;
   };
 
+  /** "Databases" column label with an optional inline create-database action. */
+  const DatabasesHeader = () => (
+    <div class="connect-dialog-picker-label">
+      <span>Databases</span>
+      <Show when={canCreateDb()}>
+        <button
+          class="connect-dialog-select-all"
+          onClick={() => {
+            setShowNewDbInput((v) => !v);
+            setNewDbName("");
+          }}
+        >
+          {showNewDbInput() ? "Cancel" : "+ New database"}
+        </button>
+      </Show>
+    </div>
+  );
+
+  /** Inline name input shown under the header while creating a database. */
+  const NewDatabaseRow = () => (
+    <Show when={showNewDbInput()}>
+      <div class="connect-dialog-new-db">
+        <input
+          class="connect-dialog-new-db-input"
+          type="text"
+          placeholder="New database name"
+          autofocus
+          value={newDbName()}
+          onInput={(e) => setNewDbName(e.currentTarget.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") {
+              e.preventDefault();
+              handleCreateDatabase();
+            } else if (e.key === "Escape") {
+              e.preventDefault();
+              setShowNewDbInput(false);
+              setNewDbName("");
+            }
+          }}
+        />
+        <button
+          class="connect-dialog-new-db-create"
+          onClick={handleCreateDatabase}
+          disabled={creatingDb() || newDbName().trim() === ""}
+        >
+          {creatingDb() ? "Creating..." : "Create"}
+        </button>
+      </div>
+    </Show>
+  );
+
   return (
     <div class="modal-overlay" onClick={() => props.onClose()}>
       <div class="modal connect-dialog" onClick={(e) => e.stopPropagation()}>
@@ -434,7 +607,8 @@ export function ConnectDialog(props: Props) {
               <Show when={hasSchemas()} fallback={
                 /* Single column for MySQL/SQLite/Redis: click to toggle */
                 <div class="connect-dialog-picker-col">
-                  <div class="connect-dialog-picker-label">Databases</div>
+                  <DatabasesHeader />
+                  <NewDatabaseRow />
                   <div class="connect-dialog-picker-list">
                     <For each={entries().map((e, i) => ({ entry: e, index: i }))}>
                       {({ entry, index }) => (
@@ -458,7 +632,8 @@ export function ConnectDialog(props: Props) {
               }>
                 {/* Left column: databases */}
                 <div class="connect-dialog-picker-col">
-                  <div class="connect-dialog-picker-label">Databases</div>
+                  <DatabasesHeader />
+                  <NewDatabaseRow />
                   <div class="connect-dialog-picker-list">
                     <For each={databaseList()}>
                       {(db) => (
@@ -480,31 +655,73 @@ export function ConnectDialog(props: Props) {
                 {/* Right column: schemas for selected database */}
                 <div class="connect-dialog-picker-col">
                   <div class="connect-dialog-picker-label">
-                    Schemas
-                    <Show when={selectedDatabase() && schemasForSelected().some(({ entry }) => !entry.alreadyExists)}>
-                      <button
-                        class="connect-dialog-select-all"
-                        onClick={() => {
-                          const items = schemasForSelected();
-                          const allCheckable = items.filter(({ entry }) => !entry.alreadyExists);
-                          const allChecked = allCheckable.every(({ entry }) => entry.checked);
-                          setEntries((prev) =>
-                            prev.map((e, i) => {
-                              const match = items.find(({ index }) => index === i);
-                              if (match && !e.alreadyExists) {
-                                return { ...e, checked: !allChecked };
-                              }
-                              return e;
-                            })
-                          );
-                        }}
-                      >
-                        {schemasForSelected().filter(({ entry }) => !entry.alreadyExists).every(({ entry }) => entry.checked)
-                          ? "Deselect all"
-                          : "Select all"}
-                      </button>
-                    </Show>
+                    <span>Schemas</span>
+                    <div class="connect-dialog-label-actions">
+                      <Show when={canCreateSchema() && !loadingSchemas()}>
+                        <button
+                          class="connect-dialog-select-all"
+                          onClick={() => {
+                            setShowNewSchemaInput((v) => !v);
+                            setNewSchemaName("");
+                          }}
+                        >
+                          {showNewSchemaInput() ? "Cancel" : "+ New schema"}
+                        </button>
+                      </Show>
+                      <Show when={selectedDatabase() && schemasForSelected().some(({ entry }) => !entry.alreadyExists)}>
+                        <button
+                          class="connect-dialog-select-all"
+                          onClick={() => {
+                            const items = schemasForSelected();
+                            const allCheckable = items.filter(({ entry }) => !entry.alreadyExists);
+                            const allChecked = allCheckable.every(({ entry }) => entry.checked);
+                            setEntries((prev) =>
+                              prev.map((e, i) => {
+                                const match = items.find(({ index }) => index === i);
+                                if (match && !e.alreadyExists) {
+                                  return { ...e, checked: !allChecked };
+                                }
+                                return e;
+                              })
+                            );
+                          }}
+                        >
+                          {schemasForSelected().filter(({ entry }) => !entry.alreadyExists).every(({ entry }) => entry.checked)
+                            ? "Deselect all"
+                            : "Select all"}
+                        </button>
+                      </Show>
+                    </div>
                   </div>
+                  <Show when={showNewSchemaInput()}>
+                    <div class="connect-dialog-new-db">
+                      <input
+                        class="connect-dialog-new-db-input"
+                        type="text"
+                        placeholder="New schema name"
+                        autofocus
+                        value={newSchemaName()}
+                        onInput={(e) => setNewSchemaName(e.currentTarget.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter") {
+                            e.preventDefault();
+                            handleCreateSchema();
+                          } else if (e.key === "Escape") {
+                            e.preventDefault();
+                            setShowNewSchemaInput(false);
+                            setNewSchemaName("");
+                          }
+                        }}
+                      />
+                      <button
+                        class="connect-dialog-new-db-create"
+                        onClick={handleCreateSchema}
+                        disabled={creatingSchema() || newSchemaName().trim() === ""}
+                      >
+                        {creatingSchema() ? "Creating..." : "Create"}
+                      </button>
+                    </div>
+                  </Show>
                   <div class="connect-dialog-picker-list">
                     <Show when={selectedDatabase()} fallback={
                       <div class="connect-dialog-empty">Select a database</div>

@@ -96,6 +96,26 @@ pub fn save_connection(
 }
 
 #[tauri::command]
+pub async fn test_connection(input: SaveConnectionInput) -> Result<(), String> {
+    // Build a throwaway config (the generated id is never persisted) and try
+    // to establish a working connection with exactly the given settings.
+    let mut config = ConnectionConfig::new(
+        input.name,
+        input.db_type,
+        input.host,
+        input.port,
+        input.username,
+        input.password,
+        input.database,
+        input.category_id,
+    );
+    config.visible_databases = input.visible_databases;
+    config.ssl_mode = input.ssl_mode;
+    config.ssh_tunnel = input.ssh_tunnel;
+    get_manager().test_connection(&config).await
+}
+
+#[tauri::command]
 pub fn list_connections(app: tauri::AppHandle) -> Result<Vec<ConnectionConfig>, String> {
     let config_dir = app
         .path()
@@ -205,6 +225,16 @@ pub async fn switch_database(app: tauri::AppHandle, connection_id: String, datab
 #[tauri::command]
 pub async fn create_database(connection_id: String, name: String) -> Result<(), String> {
     get_manager().create_database(&connection_id, &name).await
+}
+
+#[tauri::command]
+pub async fn can_create_database(connection_id: String) -> Result<bool, String> {
+    get_manager().can_create_database(&connection_id).await
+}
+
+#[tauri::command]
+pub async fn can_create_schema(connection_id: String, database: String) -> Result<bool, String> {
+    get_manager().can_create_schema(&connection_id, &database).await
 }
 
 #[tauri::command]

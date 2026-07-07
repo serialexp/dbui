@@ -26,6 +26,7 @@ pub fn run() {
         .plugin(tauri_plugin_window_state::Builder::new().build())
         .invoke_handler(tauri::generate_handler![
             save_connection,
+            test_connection,
             list_connections,
             delete_connection,
             set_visible_databases,
@@ -40,7 +41,9 @@ pub fn run() {
             list_databases,
             list_schemas,
             create_database,
+            can_create_database,
             create_schema,
+            can_create_schema,
             list_tables,
             list_views,
             list_functions,

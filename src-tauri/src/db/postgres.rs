@@ -342,6 +342,34 @@ pub async fn create_database(pool: &sqlx::PgPool, name: &str) -> Result<(), Stri
     Ok(())
 }
 
+/// Whether the current session role may run CREATE DATABASE.
+/// `pg_roles` is world-readable and `current_user` reflects the session role,
+/// so this works even for otherwise-unprivileged users.
+pub async fn can_create_database(pool: &sqlx::PgPool) -> Result<bool, String> {
+    let allowed = sqlx::query_scalar::<_, bool>(
+        "SELECT rolsuper OR rolcreatedb FROM pg_roles WHERE rolname = current_user",
+    )
+    .fetch_optional(pool)
+    .await
+    .map_err(|e| format!("Failed to check createdb privilege: {}", e))?;
+    Ok(allowed.unwrap_or(false))
+}
+
+/// Whether the current session role may run CREATE SCHEMA in `database`.
+/// Creating a schema requires the CREATE privilege on that database (which the
+/// owner and superusers always hold). `has_database_privilege` accepts the
+/// database name directly, so this works regardless of which DB the pool is on.
+pub async fn can_create_schema(pool: &sqlx::PgPool, database: &str) -> Result<bool, String> {
+    let allowed = sqlx::query_scalar::<_, bool>(
+        "SELECT has_database_privilege(current_user, $1, 'CREATE')",
+    )
+    .bind(database)
+    .fetch_optional(pool)
+    .await
+    .map_err(|e| format!("Failed to check schema-create privilege: {}", e))?;
+    Ok(allowed.unwrap_or(false))
+}
+
 pub async fn create_schema(pool: &sqlx::PgPool, name: &str) -> Result<(), String> {
     if name.is_empty() || name.contains('"') || name.contains('\0') {
         return Err("Invalid schema name".to_string());
