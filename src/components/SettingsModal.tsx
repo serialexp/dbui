@@ -1,7 +1,7 @@
 // ABOUTME: Modal for app-level settings — Ollama base URL and model selection.
 // ABOUTME: Reads/writes AppSettings and lists models from the local Ollama service.
 
-import { createSignal, For, Show, onMount, onCleanup } from "solid-js";
+import { createSignal, createEffect, For, Show, onMount, onCleanup } from "solid-js";
 import { Icon } from "./Icon";
 import type { AppSettings } from "../lib/types";
 import { getSettings, saveSettings, listOllamaModels } from "../lib/tauri";
@@ -21,6 +21,17 @@ export function SettingsModal(props: Props) {
   const [loadingModels, setLoadingModels] = createSignal(false);
   const [error, setError] = createSignal<string | null>(null);
   const [saving, setSaving] = createSignal(false);
+
+  let modelSelect: HTMLSelectElement | undefined;
+  // Re-apply the selected model to the <select> whenever either the model or
+  // the available options change. The options load asynchronously, so a plain
+  // `value={model()}` binding would be applied before the matching <option>
+  // exists and silently fall back to the placeholder.
+  createEffect(() => {
+    models();
+    const current = model();
+    if (modelSelect) modelSelect.value = current;
+  });
 
   const loadModels = async () => {
     setLoadingModels(true);
@@ -105,7 +116,7 @@ export function SettingsModal(props: Props) {
             <span>Model</span>
             <div class="settings-model-row">
               <select
-                value={model()}
+                ref={modelSelect}
                 onChange={(e) => setModel(e.currentTarget.value)}
               >
                 <option value="">
