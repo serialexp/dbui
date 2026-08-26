@@ -1,7 +1,7 @@
 // ABOUTME: PostgreSQL-specific database introspection queries.
 // ABOUTME: Provides schema, table, column, index, and constraint information.
 
-use super::{ColumnInfo, ConstraintInfo, DatabaseUser, FunctionInfo, IndexInfo, UserGrant};
+use super::{ColumnInfo, ConstraintInfo, DatabaseUser, FunctionInfo, IndexInfo, TableSize, UserGrant};
 use sqlx::Row;
 
 pub async fn list_databases(pool: &sqlx::PgPool) -> Result<Vec<String>, String> {
@@ -48,6 +48,36 @@ pub async fn list_tables(
     .map_err(|e| format!("Failed to list tables: {}", e))?;
 
     Ok(rows.iter().map(|r| r.get("table_name")).collect())
+}
+
+pub async fn get_table_sizes(
+    pool: &sqlx::PgPool,
+    _database: &str,
+    schema: &str,
+) -> Result<Vec<TableSize>, String> {
+    // pg_total_relation_size includes the table, its indexes, and TOAST data.
+    let rows = sqlx::query(
+        "SELECT c.relname AS name, pg_total_relation_size(c.oid) AS bytes
+         FROM pg_class c
+         JOIN pg_namespace n ON n.oid = c.relnamespace
+         WHERE n.nspname = $1 AND c.relkind = 'r'
+         ORDER BY c.relname",
+    )
+    .bind(schema)
+    .fetch_all(pool)
+    .await
+    .map_err(|e| format!("Failed to get table sizes: {}", e))?;
+
+    Ok(rows
+        .iter()
+        .map(|r| {
+            let bytes: Option<i64> = r.try_get("bytes").unwrap_or(None);
+            TableSize {
+                name: r.get("name"),
+                bytes: bytes.filter(|b| *b >= 0).map(|b| b as u64),
+            }
+        })
+        .collect())
 }
 
 pub async fn list_views(

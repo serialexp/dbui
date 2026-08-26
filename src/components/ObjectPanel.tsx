@@ -4,9 +4,11 @@
 import { createSignal, createEffect, For, Show, on, onCleanup } from "solid-js";
 import { Icon } from "./Icon";
 import { ContextMenu, type ContextMenuItem } from "./ContextMenu";
-import type { WorkingContext, ObjectTab, MetadataView } from "../lib/types";
+import type { WorkingContext, ObjectTab, MetadataView, TableSize } from "../lib/types";
+import { formatBytes } from "../lib/format";
 import {
   listTables,
+  getTableSizes,
   listViews,
   listFunctions,
   listMaterializedViews,
@@ -63,6 +65,7 @@ type RedisTab = (typeof REDIS_TABS)[number];
 export function ObjectPanel(props: Props) {
   const [activeTab, setActiveTab] = createSignal<ObjectTab>("tables");
   const [tables, setTables] = createSignal<string[]>([]);
+  const [tableSizes, setTableSizes] = createSignal<TableSize[]>([]);
   const [views, setViews] = createSignal<string[]>([]);
   const [functions, setFunctions] = createSignal<string[]>([]);
   const [materializedViews, setMaterializedViews] = createSignal<string[]>([]);
@@ -107,10 +110,28 @@ export function ObjectPanel(props: Props) {
     }
   };
 
+  const sizeFor = (name: string): number | null => {
+    const match = tableSizes().find((s) => s.name === name);
+    return match ? match.bytes : null;
+  };
+
+  // Table sizes are loaded separately (and unawaited) so a slow size query on a
+  // large database doesn't hold up rendering the object list.
+  const loadTableSizes = async (ctx: WorkingContext) => {
+    try {
+      const sizes = await getTableSizes(ctx.connectionId, ctx.database, ctx.schema);
+      // Guard against a stale response arriving after the context changed.
+      if (props.context?.id === ctx.id) setTableSizes(sizes);
+    } catch {
+      // Size estimation is best-effort; ignore failures silently.
+    }
+  };
+
   const loadObjects = async (ctx: WorkingContext) => {
     setLoading(true);
     setError(null);
     setTables([]);
+    setTableSizes([]);
     setViews([]);
     setFunctions([]);
     setMaterializedViews([]);
@@ -138,6 +159,9 @@ export function ObjectPanel(props: Props) {
       setSequences(seq);
       setTriggers(trg);
       setProcedures(proc);
+
+      // Fire-and-forget: populate sizes without blocking the object list.
+      loadTableSizes(ctx);
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
     } finally {
@@ -157,6 +181,7 @@ export function ObjectPanel(props: Props) {
       (id) => {
         if (!id || !props.context) {
           setTables([]);
+          setTableSizes([]);
           setViews([]);
           setFunctions([]);
           setMaterializedViews([]);
@@ -335,6 +360,11 @@ export function ObjectPanel(props: Props) {
                         <Icon svg={getTabIcon(activeTab())} size={12} />
                       </span>
                       <span class="object-item-label">{name}</span>
+                      <Show when={activeTab() === "tables" && sizeFor(name) != null}>
+                        <span class="object-item-size" title="Estimated size on disk">
+                          {formatBytes(sizeFor(name)!)}
+                        </span>
+                      </Show>
                       <Show when={activeTab() === "tables"}>
                         <span class="object-item-actions">
                           <button

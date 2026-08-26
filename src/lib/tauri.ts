@@ -13,6 +13,7 @@ import type {
   IndexInfo,
   ConstraintInfo,
   FunctionInfo,
+  TableSize,
   ViewDependency,
   DatabaseUser,
   UserGrant,
@@ -140,6 +141,14 @@ export async function listViews(
   schema: string
 ): Promise<string[]> {
   return invoke("list_views", { connectionId, database, schema });
+}
+
+export async function getTableSizes(
+  connectionId: string,
+  database: string,
+  schema: string
+): Promise<TableSize[]> {
+  return invoke("get_table_sizes", { connectionId, database, schema });
 }
 
 export async function listFunctions(

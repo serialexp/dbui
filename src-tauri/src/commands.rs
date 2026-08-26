@@ -264,6 +264,17 @@ pub async fn list_tables(
 }
 
 #[tauri::command]
+pub async fn get_table_sizes(
+    connection_id: String,
+    database: String,
+    schema: String,
+) -> Result<Vec<crate::db::TableSize>, String> {
+    get_manager()
+        .get_table_sizes(&connection_id, &database, &schema)
+        .await
+}
+
+#[tauri::command]
 pub async fn list_views(
     connection_id: String,
     database: String,

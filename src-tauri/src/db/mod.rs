@@ -75,6 +75,14 @@ pub struct ConstraintInfo {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TableSize {
+    pub name: String,
+    /// Estimated on-disk size in bytes (including indexes where the engine
+    /// reports it). `None` when the backend can't determine a size.
+    pub bytes: Option<u64>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct FunctionInfo {
     pub name: String,
     pub definition: String,
@@ -443,6 +451,21 @@ impl ConnectionManager {
             ConnectionPool::Mysql(p) => mysql::list_tables(p, database, schema).await,
             ConnectionPool::Sqlite(p) => sqlite::list_tables(p, database, schema).await,
             ConnectionPool::Redis(c) => redis_db::list_tables(&mut c.clone(), database, schema).await,
+        }
+    }
+
+    pub async fn get_table_sizes(
+        &self,
+        connection_id: &str,
+        database: &str,
+        schema: &str,
+    ) -> Result<Vec<TableSize>, String> {
+        let pool = self.get_pool(connection_id).await?;
+        match pool.as_ref() {
+            ConnectionPool::Postgres(p) => postgres::get_table_sizes(p, database, schema).await,
+            ConnectionPool::Mysql(p) => mysql::get_table_sizes(p, database, schema).await,
+            ConnectionPool::Sqlite(p) => sqlite::get_table_sizes(p, database, schema).await,
+            ConnectionPool::Redis(_) => Ok(vec![]),
         }
     }
 

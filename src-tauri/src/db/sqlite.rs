@@ -1,7 +1,7 @@
 // ABOUTME: SQLite-specific database introspection queries.
 // ABOUTME: Uses PRAGMA statements and sqlite_master for schema information.
 
-use super::{ColumnInfo, ConstraintInfo, FunctionInfo, IndexInfo};
+use super::{ColumnInfo, ConstraintInfo, FunctionInfo, IndexInfo, TableSize};
 use sqlx::Row;
 
 pub async fn list_databases(_pool: &sqlx::SqlitePool) -> Result<Vec<String>, String> {
@@ -30,6 +30,50 @@ pub async fn list_tables(
     .map_err(|e| format!("Failed to list tables: {}", e))?;
 
     Ok(rows.iter().map(|r| r.get("name")).collect())
+}
+
+pub async fn get_table_sizes(
+    pool: &sqlx::SqlitePool,
+    _database: &str,
+    _schema: &str,
+) -> Result<Vec<TableSize>, String> {
+    // The dbstat virtual table reports per-table page usage but is only present
+    // when SQLite was built with SQLITE_ENABLE_DBSTAT_VTAB. If it's unavailable
+    // the query fails; fall back to listing tables with unknown sizes rather
+    // than erroring the whole panel.
+    // Attribute each object's pages to its parent table via sqlite_master.tbl_name
+    // so a table's size includes its own indexes.
+    let rows = sqlx::query(
+        "SELECT m.tbl_name AS name, SUM(d.pgsize) AS bytes
+         FROM dbstat d
+         JOIN sqlite_master m ON m.name = d.name
+         WHERE m.type IN ('table', 'index') AND m.tbl_name NOT LIKE 'sqlite_%'
+         GROUP BY m.tbl_name
+         ORDER BY m.tbl_name",
+    )
+    .fetch_all(pool)
+    .await;
+
+    match rows {
+        Ok(rows) => Ok(rows
+            .iter()
+            .map(|r| {
+                let bytes: Option<i64> = r.try_get("bytes").unwrap_or(None);
+                TableSize {
+                    name: r.get("name"),
+                    bytes: bytes.filter(|b| *b >= 0).map(|b| b as u64),
+                }
+            })
+            // dbstat also lists indexes and internal objects; keep only real tables.
+            .collect()),
+        Err(_) => {
+            let names = list_tables(pool, _database, _schema).await?;
+            Ok(names
+                .into_iter()
+                .map(|name| TableSize { name, bytes: None })
+                .collect())
+        }
+    }
 }
 
 pub async fn list_views(

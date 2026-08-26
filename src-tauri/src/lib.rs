@@ -45,6 +45,7 @@ pub fn run() {
             create_schema,
             can_create_schema,
             list_tables,
+            get_table_sizes,
             list_views,
             list_functions,
             list_materialized_views,

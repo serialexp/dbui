@@ -67,6 +67,46 @@ body {
   user-select: none;
 }
 
+/* Drag handle centered over the seam between the sidebar and main content.
+   `left` is set inline to the current sidebar width; translateX(-50%) centers
+   the strip on the 1px border. */
+/* Width must stay even: with `left: <width>px` and translateX(-50%), an odd
+   width lands the handle on a half-pixel, and that subpixel seam renders as a
+   faint accent-colored line. */
+.sidebar-resizer {
+  position: absolute;
+  top: 0;
+  width: 6px;
+  height: 100%;
+  transform: translateX(-50%);
+  cursor: col-resize;
+  z-index: 10;
+}
+
+.sidebar-resizer::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 50%;
+  width: 2px;
+  height: 100%;
+  transform: translateX(-50%);
+  background: transparent;
+  transition: background 0.12s ease;
+}
+
+.sidebar-resizer:hover::after,
+body.resizing-sidebar .sidebar-resizer::after {
+  background: var(--accent-color);
+}
+
+/* While dragging, suppress hover/selection flicker across the whole app. */
+body.resizing-sidebar {
+  cursor: col-resize;
+  -webkit-user-select: none;
+  user-select: none;
+}
+
 .sidebar-header {
   display: flex;
   align-items: center;
@@ -393,6 +433,7 @@ body {
 }
 
 .object-item {
+  position: relative;
   display: flex;
   align-items: center;
   gap: 6px;
@@ -419,6 +460,28 @@ body {
   white-space: nowrap;
   font-family: "SF Mono", Monaco, Consolas, monospace;
   font-size: 12px;
+}
+
+/* Anchored to the item's right edge so sizes line up in a column, independent
+   of the reserved (hover-only) actions slot. Hidden on hover to make room. */
+.object-item-size {
+  position: absolute;
+  right: 12px;
+  top: 0;
+  bottom: 0;
+  display: flex;
+  align-items: center;
+  font-family: "SF Mono", Monaco, Consolas, monospace;
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-secondary);
+  opacity: 0.7;
+  white-space: nowrap;
+}
+
+/* Hide the size on hover so the action buttons have room. */
+.object-item:hover .object-item-size {
+  display: none;
 }
 
 .object-item-actions {

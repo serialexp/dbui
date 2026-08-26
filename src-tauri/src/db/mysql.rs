@@ -1,7 +1,7 @@
 // ABOUTME: MySQL-specific database introspection queries.
 // ABOUTME: Provides schema, table, column, index, and constraint information.
 
-use super::{ColumnInfo, ConstraintInfo, DatabaseUser, FunctionInfo, IndexInfo, UserGrant};
+use super::{ColumnInfo, ConstraintInfo, DatabaseUser, FunctionInfo, IndexInfo, TableSize, UserGrant};
 use sqlx::Row;
 
 /// MySQL over TLS may return information_schema strings as VARBINARY instead of VARCHAR.
@@ -63,6 +63,36 @@ pub async fn list_tables(
     .map_err(|e| format!("Failed to list tables: {}", e))?;
 
     Ok(rows.iter().map(|r| get_str(r, 0)).collect())
+}
+
+pub async fn get_table_sizes(
+    pool: &sqlx::MySqlPool,
+    database: &str,
+    _schema: &str,
+) -> Result<Vec<TableSize>, String> {
+    // data_length + index_length is InnoDB's estimate of on-disk size. These
+    // can be NULL for some engines/views, so treat NULL as "unknown".
+    let rows = sqlx::query(
+        "SELECT table_name AS name, (data_length + index_length) AS bytes
+         FROM information_schema.tables
+         WHERE table_schema = ? AND table_type = 'BASE TABLE'
+         ORDER BY table_name",
+    )
+    .bind(database)
+    .fetch_all(pool)
+    .await
+    .map_err(|e| format!("Failed to get table sizes: {}", e))?;
+
+    Ok(rows
+        .iter()
+        .map(|r| {
+            let bytes: Option<i64> = r.try_get("bytes").unwrap_or(None);
+            TableSize {
+                name: get_str(r, 0),
+                bytes: bytes.filter(|b| *b >= 0).map(|b| b as u64),
+            }
+        })
+        .collect())
 }
 
 pub async fn list_views(

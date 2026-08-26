@@ -116,6 +116,11 @@ export interface ConstraintInfo {
   foreign_columns: string[] | null;
 }
 
+export interface TableSize {
+  name: string;
+  bytes: number | null;
+}
+
 export interface FunctionInfo {
   name: string;
   definition: string;

@@ -48,6 +48,17 @@ import "./styles/app.css";
 // progress events emitted by the Rust backend can be routed to the correct tab.
 const queryIdToTabId = new Map<string, string>();
 
+const MIN_SIDEBAR_WIDTH = 200;
+const MAX_SIDEBAR_WIDTH = 700;
+const DEFAULT_SIDEBAR_WIDTH = 300;
+const SIDEBAR_WIDTH_KEY = "dbui.sidebarWidth";
+
+function loadSidebarWidth(): number {
+  const stored = Number(localStorage.getItem(SIDEBAR_WIDTH_KEY));
+  if (!Number.isFinite(stored) || stored <= 0) return DEFAULT_SIDEBAR_WIDTH;
+  return Math.min(MAX_SIDEBAR_WIDTH, Math.max(MIN_SIDEBAR_WIDTH, stored));
+}
+
 function AppContent() {
   const {
     store,
@@ -252,6 +263,34 @@ ORDER BY user;`;
   const [aiBusy, setAiBusy] = createSignal(false);
   const [aiError, setAiError] = createSignal<string | null>(null);
   const [suggestion, setSuggestion] = createSignal<SqlSuggestion | null>(null);
+  const [sidebarWidth, setSidebarWidth] = createSignal(loadSidebarWidth());
+
+  const startSidebarResize = (e: PointerEvent) => {
+    e.preventDefault();
+    const startX = e.clientX;
+    const startWidth = sidebarWidth();
+
+    const onMove = (ev: PointerEvent) => {
+      const next = Math.min(
+        MAX_SIDEBAR_WIDTH,
+        Math.max(MIN_SIDEBAR_WIDTH, startWidth + (ev.clientX - startX)),
+      );
+      setSidebarWidth(next);
+    };
+
+    const onUp = () => {
+      window.removeEventListener("pointermove", onMove);
+      window.removeEventListener("pointerup", onUp);
+      document.body.classList.remove("resizing-sidebar");
+      localStorage.setItem(SIDEBAR_WIDTH_KEY, String(sidebarWidth()));
+    };
+
+    document.body.classList.add("resizing-sidebar");
+    window.addEventListener("pointermove", onMove);
+    window.addEventListener("pointerup", onUp);
+  };
+
+  onCleanup(() => document.body.classList.remove("resizing-sidebar"));
 
   // Format a suggestion as `-- motivation` (one line per motivation line)
   // followed by the SQL, so the reasoning stays visible alongside the query.
@@ -989,7 +1028,7 @@ ORDER BY user;`;
   const tab = () => activeTab();
 
   return (
-    <div class="app">
+    <div class="app" style={{ "--sidebar-width": `${sidebarWidth()}px` }}>
       <Show when={tab()?.categoryColor}>
         <div
           class="category-overlay"
@@ -1012,6 +1051,16 @@ ORDER BY user;`;
         onShowProcesses={handleShowProcesses}
         onShowUsers={handleShowUsers}
         onShowSettings={() => setShowSettings(true)}
+      />
+      <div
+        class="sidebar-resizer"
+        style={{ left: `${sidebarWidth()}px` }}
+        onPointerDown={startSidebarResize}
+        onDblClick={() => {
+          setSidebarWidth(DEFAULT_SIDEBAR_WIDTH);
+          localStorage.setItem(SIDEBAR_WIDTH_KEY, String(DEFAULT_SIDEBAR_WIDTH));
+        }}
+        title="Drag to resize (double-click to reset)"
       />
       <main class="main-content">
         <Show when={store.tabs.length > 0}>

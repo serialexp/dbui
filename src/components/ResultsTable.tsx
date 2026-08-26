@@ -5,6 +5,7 @@ import { createSignal, createEffect, onCleanup, For, Show } from "solid-js";
 import type { QueryResult, QueryProgress, CellSelection, TableContext, DatabaseType } from "../lib/types";
 import type { RowEdit } from "../lib/updateQueryGenerator";
 import { exportAsCsv, exportAsJson, exportAsSqlInsert } from "../lib/resultExporter";
+import { formatBytes } from "../lib/format";
 import { saveTextFile, exportXlsx } from "../lib/tauri";
 import { readText } from "@tauri-apps/plugin-clipboard-manager";
 import { save } from "@tauri-apps/plugin-dialog";
@@ -53,13 +54,6 @@ const EXPORT_FORMATS: ExportFormatMeta[] = [
   { format: "csv", label: "CSV", extension: "csv", clipboard: true },
   { format: "xlsx", label: "Excel (XLSX)", extension: "xlsx", clipboard: false },
 ];
-
-function formatBytes(n: number): string {
-  if (n < 1024) return `${n} B`;
-  if (n < 1024 * 1024) return `${(n / 1024).toFixed(1)} KB`;
-  if (n < 1024 * 1024 * 1024) return `${(n / (1024 * 1024)).toFixed(2)} MB`;
-  return `${(n / (1024 * 1024 * 1024)).toFixed(2)} GB`;
-}
 
 export function ResultsTable(props: Props) {
   const MAX_DISPLAY_ROWS = 1000;
